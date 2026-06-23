@@ -1,7 +1,7 @@
 // Game orchestrator: owns every system, the fixed-ish delta loop, object pools,
 // collision, camera + screen shake, FX, and the run state machine.
 
-import { WORLD, DIFFICULTY, COLORS } from './config.js';
+import { WORLD, DIFFICULTY, COLORS, STAGES } from './config.js';
 import { rand, TAU, chance } from './rng.js';
 import { Pool } from './pool.js';
 import { SpatialGrid } from './grid.js';
@@ -46,6 +46,10 @@ export class Game {
     this.statScaleNow = 1;
     this.totalRecruited = 0;
     this.pendingLevelUps = 0;
+    this.stage = 0;
+    this.stageElapsed = 0;
+    this.bossActive = false;
+    this.bossRef = null;
     this.banner = { text: '', life: 0 };
     this.shake = { t: 0, mag: 0 };
 
@@ -105,8 +109,14 @@ export class Game {
     this.statScaleNow = 1;
     this.totalRecruited = 0;
     this.pendingLevelUps = 0;
-    this.banner = { text: 'SURVIVE', life: 2 };
+    this.banner = { text: STAGES[0].name, life: 2.2 };
     this.camera = { x: -this.w / 2, y: -this.h / 2 };
+
+    // Biome / stage progression.
+    this.stage = 0;
+    this.stageElapsed = 0;
+    this.bossActive = false;
+    this.bossRef = null;
 
     this.ui.hideStart();
     this.ui.hideGameOver();
@@ -122,8 +132,20 @@ export class Game {
 
   announce(text) { this.banner = { text, life: 2.5 }; }
 
+  // Killing a biome's boss clears it and advances to the next biome.
+  advanceStage() {
+    this.stage++;
+    this.stageElapsed = 0;
+    this.bossActive = false;
+    this.bossRef = null;
+    const s = STAGES[this.stage % STAGES.length];
+    this.announce(`▶ ${s.name}`);
+    // Reward clearing a biome: top the player up a little.
+    this.player.heal(this.player.maxHp * 0.25);
+  }
+
   // ---------------- spawning helpers ----------------
-  spawnEnemy(type, x, y) { this.enemies.spawn(type, x, y); }
+  spawnEnemy(type, x, y) { return this.enemies.spawn(type, x, y); }
 
   spawnGem(x, y, value) { this.gems.spawn(x, y, value); }
 
@@ -252,6 +274,14 @@ export class Game {
     this.player.kills++;
     this.audio.enemyDeath();
     this.deathBurst(e.x, e.y, e.radius, e.def.color || '#c0392b');
+    // Bombers detonate, hurting nearby friendlies.
+    if (e.def.explodeOnDeath) {
+      const ex = e.def.explodeOnDeath;
+      this.fx.spawn({ type: 'explosion', x: e.x, y: e.y, radius: ex.radius, life: 0.4, maxLife: 0.4 });
+      this.damageFriendlies(e.x, e.y, ex.radius, ex.damage * this.statScaleNow);
+      this.shakeCamera(5);
+      this.audio.explosion();
+    }
     // XP drops scale with the enemy's worth.
     const drops = e.def.boss ? 12 : e.def.elite ? 5 : 1;
     for (let i = 0; i < drops; i++) {
@@ -259,6 +289,8 @@ export class Game {
       this.spawnGem(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, Math.ceil(e.xp / drops));
     }
     if (e.def.boss || e.def.elite) { this.fx.spawn({ type: 'explosion', x: e.x, y: e.y, radius: e.radius * 1.6, life: 0.5, maxLife: 0.5 }); this.shakeCamera(10); }
+    // A biome boss falling advances to the next biome.
+    if (e.def.boss && this.bossActive && e === this.bossRef) this.advanceStage();
 
     // Small chance to drop a health pack (much higher for elites/bosses).
     const dropChance = e.def.boss ? 1 : e.def.elite ? 0.45 : 0.05;
@@ -285,6 +317,8 @@ export class Game {
   update(dtMs) {
     const dt = dtMs / 1000;
     this.elapsed += dt;
+    // Stop the biome timer once the boss is up, so the gate fires only once.
+    if (!this.bossActive) this.stageElapsed += dt;
     this.statScaleNow = DIFFICULTY.statScale(this.elapsed);
     if (this.banner.life > 0) this.banner.life -= dt;
     if (this.shake.t > 0) { this.shake.t -= dt; if (this.shake.t <= 0) this.shake.mag = 0; }
@@ -648,8 +682,9 @@ export class Game {
     const ox = -((camX % t) + t) % t;
     const oy = -((camY % t) + t) % t;
 
-    // Tiled ground texture (authored). Falls back to a faint grid if absent.
-    const ground = getSprite('ground');
+    // Tiled ground texture for the current biome. Falls back to a faint grid.
+    const stage = STAGES[(this.stage || 0) % STAGES.length];
+    const ground = getSprite(stage.ground) || getSprite('ground');
     if (ground) {
       for (let y = oy; y < this.h; y += t) {
         for (let x = ox; x < this.w; x += t) {
@@ -676,6 +711,10 @@ export class Game {
     g.addColorStop(1, 'rgba(0,0,0,0.55)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
+
+    // Biome mood wash.
+    const tint = STAGES[(this.stage || 0) % STAGES.length].tint;
+    if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, w, h); }
   }
 
   drawShadow(x, y, r) {

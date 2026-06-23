@@ -99,6 +99,7 @@ def build_soldiers():
 CRIMSON = ((58, 13, 13), (142, 43, 43), (208, 90, 90))
 MAGENTA = ((58, 13, 42), (155, 58, 106), (213, 111, 174))
 DARK    = ((30, 6, 6),   (94, 36, 36),  (154, 64, 64))
+ORANGE  = ((70, 30, 6),  (200, 96, 24), (255, 176, 80))   # volatile / explosive
 
 # (manifest, body, eye, mouth, horn|None, palette, size, eye_scale)
 ENEMIES = [
@@ -108,6 +109,10 @@ ENEMIES = [
     ('enemy_elite',   'body_redD.png', 'eye_psycho_light.png', 'mouth_closed_teeth.png', 'detail_red_horn_large.png', MAGENTA, 54, 0.42),
     ('enemy_tank',    'body_redF.png', 'eye_angry_red.png',   'mouth_closed_teeth.png', 'detail_red_horn_large.png', DARK,    62, 0.34),
     ('enemy_boss',    'body_redE.png', 'eye_angry_red.png',   'mouth_closed_fangs.png', 'detail_red_horn_large.png', DARK,   128, 0.40),
+    # M3a archetypes.
+    ('enemy_bomber',   'body_redA.png', 'eye_angry_red.png',    'mouth_closed_fangs.png', None,                        ORANGE,  34, 0.46),
+    ('enemy_spitter',  'body_redD.png', 'eye_psycho_light.png', 'mouthC.png',             'detail_red_horn_small.png', MAGENTA, 38, 0.42),
+    ('enemy_summoner', 'body_redE.png', 'eye_psycho_light.png', 'mouth_closed_teeth.png', 'detail_red_horn_large.png', MAGENTA, 48, 0.44),
     # Boss roster (large, distinct silhouettes).
     ('boss_maw',      'body_redF.png', 'eye_angry_red.png',   'mouth_closed_teeth.png', 'detail_red_horn_large.png', DARK,   132, 0.48),
     ('boss_charger',  'body_redB.png', 'eye_angry_red.png',   'mouth_closed_fangs.png', 'detail_red_horn_large.png', CRIMSON, 122, 0.46),
@@ -154,14 +159,23 @@ def build_enemies():
 
 # ---------------- Ground texture ----------------
 def build_ground():
-    # Seamless gray-blue stone floor, darkened to match the game's dark mood
-    # and to keep the crimson enemies / green soldiers reading clearly.
-    tile = Image.open(os.path.join(TDS, 'Tiles', 'tile_09.png')).convert('RGBA')
-    tile = tile.resize((64, 64), Image.LANCZOS)
+    # One base stone tile, recolored per biome. (name, source tile, brightness, tint|None)
     from PIL import ImageEnhance
-    tile = ImageEnhance.Brightness(tile).enhance(0.58)
-    tile.save(os.path.join(OUT, 'ground.png'))
-    print('ground', tile.size)
+    biomes = [
+        ('ground_depot',  'tile_09', 0.58, None),                # gray concrete
+        ('ground_field',  'tile_17', 0.72, None),                # grass
+        ('ground_desert', 'tile_09', 0.66, (1.15, 0.95, 0.65)),  # warm tan
+        ('ground_marsh',  'tile_09', 0.5,  (1.1, 0.6, 0.62)),    # dark crimson
+    ]
+    for name, src, bright, tint in biomes:
+        t = Image.open(os.path.join(TDS, 'Tiles', src + '.png')).convert('RGBA').resize((64, 64), Image.LANCZOS)
+        t = ImageEnhance.Brightness(t).enhance(bright)
+        if tint:
+            t = tint_multiply(t, tint)
+        t.save(os.path.join(OUT, name + '.png'))
+        print('ground', name, t.size)
+    # Back-compat alias used before biomes existed.
+    Image.open(os.path.join(OUT, 'ground_depot.png')).save(os.path.join(OUT, 'ground.png'))
 
 
 if __name__ == '__main__':

@@ -25,6 +25,23 @@ export const ENEMY_DEFS = {
     sprite: 'enemy_elite', radius: 24, hp: 420, speed: 70, damage: 22,
     xp: 25, color: '#7a1f5a', elite: true,
   },
+  // Rushes the player and detonates on death — telegraphed by a pulsing glow.
+  bomber: {
+    sprite: 'enemy_bomber', radius: 15, hp: 22, speed: 120, damage: 6,
+    xp: 3, color: '#d2691e', explodeOnDeath: { radius: 78, damage: 26 },
+  },
+  // Stands off and lobs a slow, heavy projectile.
+  spitter: {
+    sprite: 'enemy_spitter', radius: 16, hp: 34, speed: 56, damage: 6,
+    xp: 4, color: '#9b3a6a', ranged: true,
+    fireRange: 420, fireEverySec: 2.6, projSpeed: 200, projDamage: 14, projColor: '#ff7bd0',
+  },
+  // Keeps distance and periodically summons swarmers; priority kill.
+  summoner: {
+    sprite: 'enemy_summoner', radius: 22, hp: 160, speed: 52, damage: 12,
+    xp: 14, color: '#7a1f5a',
+    summon: { everySec: 4.5, spawn: 'swarmer', n: 2, standoff: 320 },
+  },
   boss: {
     sprite: 'enemy_boss', radius: 56, hp: 4200, speed: 52, damage: 40,
     xp: 220, color: '#3a0d0d', boss: true,
@@ -81,7 +98,9 @@ export function resetEnemy(e, type, x, y, statScale) {
   e.speed = def.speed;
   e.xp = def.xp;
   e.flash = 0;
-  e.fireCd = (def.fireEverySec ?? 0) * 1000 * Math.random();
+  e.fireCd = def.summon
+    ? def.summon.everySec * 1000
+    : (def.fireEverySec ?? 0) * 1000 * Math.random();
   e.hitCd = 0;
   e.angle = 0;
   // Bosses open with a short grace period before their first attack.
@@ -119,6 +138,25 @@ export function updateEnemy(e, dtMs, target, game) {
     if (e.fireCd <= 0 && dist <= e.def.fireRange) {
       e.fireCd = e.def.fireEverySec * 1000;
       game.spawnEnemyBullet(e.x, e.y, e.angle, e.def.projSpeed, e.def.projDamage * game.statScaleNow, e.def.projColor);
+    }
+  } else if (e.def.summon) {
+    // Hold at standoff range and spawn adds on a timer.
+    const s = e.def.summon;
+    if (dist > s.standoff) {
+      e.x += dx / dist * e.speed * dt;
+      e.y += dy / dist * e.speed * dt;
+    } else if (dist < s.standoff * 0.6) {
+      e.x -= dx / dist * e.speed * 0.6 * dt;
+      e.y -= dy / dist * e.speed * 0.6 * dt;
+    }
+    e.fireCd -= dtMs;
+    if (e.fireCd <= 0) {
+      e.fireCd = s.everySec * 1000;
+      for (let i = 0; i < s.n; i++) {
+        const a = Math.random() * TAU, r = rand(20, 40);
+        game.spawnEnemy(s.spawn, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
+      }
+      game.fx.spawn({ type: 'tele_circle', x: e.x, y: e.y, radius: e.radius * 1.8, life: 0.3, maxLife: 0.3, color: 'rgba(150,80,200,0.5)' });
     }
   } else {
     e.x += dx / dist * e.speed * dt;

@@ -41,6 +41,20 @@ export const COLORS = {
   bgB: '#222a1c',
 };
 
+// Stage-gated biomes. Each biome escalates with its own enemy pool, then a boss
+// gates the next. After the last, biomes loop (statScale keeps difficulty rising).
+// `pool` entries are [enemyType, weight]; `tint` overlays the biome's mood.
+export const STAGES = [
+  { name: 'CONCRETE DEPOT', ground: 'ground_depot', tint: null, bossAfterSec: 70,
+    pool: [['chaser', 60], ['swarmer', 30], ['bomber', 12]] },
+  { name: 'OVERGROWN FIELD', ground: 'ground_field', tint: 'rgba(40,90,30,0.14)', bossAfterSec: 80,
+    pool: [['chaser', 45], ['swarmer', 30], ['bomber', 18], ['ranged', 18]] },
+  { name: 'DESERT RUINS', ground: 'ground_desert', tint: 'rgba(150,110,40,0.14)', bossAfterSec: 95,
+    pool: [['chaser', 35], ['swarmer', 28], ['bomber', 16], ['spitter', 18], ['tank', 12]] },
+  { name: 'BLOOD MARSH', ground: 'ground_marsh', tint: 'rgba(110,20,20,0.18)', bossAfterSec: 110,
+    pool: [['chaser', 30], ['swarmer', 25], ['bomber', 16], ['spitter', 16], ['tank', 14], ['summoner', 8]] },
+];
+
 // Difficulty curve helpers (functions of elapsed seconds).
 export const DIFFICULTY = {
   // Enemies alive cap grows over time.
