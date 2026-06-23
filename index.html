@@ -106,6 +106,22 @@
       <button id="shop-back-btn">BACK</button>
     </div>
 
+    <!-- Pause menu + settings -->
+    <div id="pause-screen" class="modal hidden">
+      <h1>PAUSED</h1>
+      <div class="settings-row">
+        <label for="set-volume">🔊 Volume</label>
+        <input type="range" id="set-volume" min="0" max="1" step="0.05" value="0.7">
+      </div>
+      <div class="settings-row">
+        <label for="set-shake">📳 Screen shake</label>
+        <input type="checkbox" id="set-shake" checked>
+      </div>
+      <button id="resume-btn">RESUME</button>
+      <button id="quit-btn" class="lb-btn">QUIT TO MENU</button>
+      <p class="hint">Press P or Esc to resume</p>
+    </div>
+
     <!-- Active ability button / cooldown indicator -->
     <div id="ability-btn" class="hidden">
       <div id="ability-cd"></div>

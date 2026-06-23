@@ -51,6 +51,9 @@ export class Player {
 
     // How many times each passive upgrade has been picked — drives evolutions.
     this.upgradeCounts = {};
+
+    // What last damaged the player — shown on the game-over screen.
+    this.lastHitBy = 'the swarm';
   }
 
   // Swap a base weapon for its evolved variant in place.

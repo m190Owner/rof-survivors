@@ -12,12 +12,18 @@ import { Team } from './teammates.js';
 import { Spawner } from './spawner.js';
 import { makeEnemy, resetEnemy, updateEnemy, ENEMY_DEFS } from './enemies.js';
 import { generateCards } from './upgrades.js';
-import { loadSave, writeSave, coinsForRun, applyMetaBonuses } from './save.js';
+import { loadSave, writeSave, coinsForRun, applyMetaBonuses, loadSettings, writeSettings } from './save.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { CHARACTER_DEFS, CHARACTER_ORDER } from './characters.js';
 import { audio } from './audio.js';
 
-const STATE = { START: 'start', RUNNING: 'running', LEVELUP: 'levelup', OVER: 'over' };
+const STATE = { START: 'start', RUNNING: 'running', LEVELUP: 'levelup', OVER: 'over', PAUSED: 'paused' };
+
+// Readable names for the "Killed by ___" line on the game-over screen.
+const KILL_LABELS = {
+  chaser: 'a Chaser', swarmer: 'a Swarmer', tank: 'a Tank', ranged: 'a Shooter',
+  elite: 'an Elite', bomber: 'a Bomber', spitter: 'a Spitter', summoner: 'a Summoner',
+};
 
 export class Game {
   constructor(canvas) {
@@ -43,6 +49,7 @@ export class Game {
 
     this.selectedCharacter = CHARACTER_ORDER[0];
     this.save = loadSave();
+    this.settings = loadSettings();
     this.coinsEarned = 0;
     this.state = STATE.START;
     this.elapsed = 0;
@@ -92,11 +99,32 @@ export class Game {
       const muted = this.audio.toggleMute();
       this.ui.el.muteBtn.textContent = muted ? '🔇' : '🔊';
     });
+
+    // Pause menu (P / Esc) + its controls.
+    window.addEventListener('keydown', (e) => {
+      if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') &&
+          (this.state === STATE.RUNNING || this.state === STATE.PAUSED)) {
+        e.preventDefault();
+        this.togglePause();
+      }
+    });
+    this.ui.el.resumeBtn.addEventListener('click', () => this.togglePause());
+    this.ui.el.quitBtn.addEventListener('click', () => this.quitToMenu());
+    this.ui.el.setVolume.addEventListener('input', (e) => {
+      this.settings.volume = parseFloat(e.target.value);
+      this.audio.setMasterVolume(this.settings.volume);
+      writeSettings(this.settings);
+    });
+    this.ui.el.setShake.addEventListener('change', (e) => {
+      this.settings.shake = e.target.checked;
+      writeSettings(this.settings);
+    });
   }
 
   // ---------------- lifecycle ----------------
   start(charId) {
     this.audio.init(); // user gesture — unlock audio + start music
+    this.audio.setMasterVolume(this.settings.volume);
     if (charId) this.selectedCharacter = charId;
     const charDef = CHARACTER_DEFS[this.selectedCharacter];
     this.player = new Player(charDef, 0, 0);
@@ -236,9 +264,12 @@ export class Game {
   }
 
   // Apply AoE damage to the player + teammates (used by boss attacks).
-  damageFriendlies(x, y, radius, dmg) {
+  enemyLabel(e) { return e.def.bossName || KILL_LABELS[e.type] || 'an enemy'; }
+
+  damageFriendlies(x, y, radius, dmg, source = null) {
     const p = this.player;
     if (Math.hypot(p.x - x, p.y - y) <= radius + p.radius) {
+      if (source) p.lastHitBy = source;
       if (p.takeDamage(dmg)) { this.shakeCamera(6); this.audio.playerHurt(); }
     }
     for (const m of this.team.members) {
@@ -253,7 +284,22 @@ export class Game {
     }
   }
 
-  shakeCamera(mag) { this.shake.t = 0.18; this.shake.mag = Math.max(this.shake.mag, mag); }
+  shakeCamera(mag) {
+    if (!this.settings.shake) return;
+    this.shake.t = 0.18; this.shake.mag = Math.max(this.shake.mag, mag);
+  }
+
+  togglePause() {
+    if (this.state === STATE.RUNNING) { this.state = STATE.PAUSED; this.ui.showPause(this); }
+    else if (this.state === STATE.PAUSED) { this.state = STATE.RUNNING; this.ui.hidePause(); }
+  }
+
+  quitToMenu() {
+    this.state = STATE.START;
+    this.ui.hidePause();
+    this.ui.hideAbility();
+    this.ui.showStart();
+  }
 
   findNearestEnemy(x, y, range) {
     let best = null, bestD = range * range;
@@ -285,7 +331,7 @@ export class Game {
     if (e.def.explodeOnDeath) {
       const ex = e.def.explodeOnDeath;
       this.fx.spawn({ type: 'explosion', x: e.x, y: e.y, radius: ex.radius, life: 0.4, maxLife: 0.4 });
-      this.damageFriendlies(e.x, e.y, ex.radius, ex.damage * this.statScaleNow);
+      this.damageFriendlies(e.x, e.y, ex.radius, ex.damage * this.statScaleNow, this.enemyLabel(e));
       this.shakeCamera(5);
       this.audio.explosion();
     }
@@ -390,6 +436,7 @@ export class Game {
       if (bd <= rr * rr && e.hitCd <= 0) {
         e.hitCd = 500;
         if (target === p) {
+          p.lastHitBy = this.enemyLabel(e);
           if (p.takeDamage(e.damage)) { this.shakeCamera(5); this.audio.playerHurt(); }
         } else {
           target.takeDamage(e.damage);
@@ -428,6 +475,7 @@ export class Game {
       if (b.life <= 0) { b.alive = false; continue; }
       // vs player
       if ((p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= (p.radius + 4) ** 2) {
+        p.lastHitBy = 'enemy fire';
         if (p.takeDamage(b.damage)) { this.shakeCamera(4); this.audio.playerHurt(); }
         b.alive = false; continue;
       }

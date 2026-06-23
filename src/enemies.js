@@ -244,7 +244,7 @@ function resolveBossAttack(e, target, game) {
   if (atk.kind === 'slam') {
     for (const p of e.telePts) {
       game.fx.spawn({ type: 'explosion', x: p.x, y: p.y, radius: atk.radius, life: 0.4, maxLife: 0.4 });
-      game.damageFriendlies(p.x, p.y, atk.radius, atk.damage * game.statScaleNow);
+      game.damageFriendlies(p.x, p.y, atk.radius, atk.damage * game.statScaleNow, e.def.bossName);
     }
     game.audio.explosion();
     game.shakeCamera(7);

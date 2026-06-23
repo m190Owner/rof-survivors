@@ -45,6 +45,11 @@ export class UI {
       shopUpgrades: document.getElementById('shop-upgrades'),
       shopOperators: document.getElementById('shop-operators'),
       shopBack: document.getElementById('shop-back-btn'),
+      pauseScreen: document.getElementById('pause-screen'),
+      resumeBtn: document.getElementById('resume-btn'),
+      quitBtn: document.getElementById('quit-btn'),
+      setVolume: document.getElementById('set-volume'),
+      setShake: document.getElementById('set-shake'),
     };
 
     // The run currently shown on the game-over screen, set in showGameOver().
@@ -254,6 +259,14 @@ export class UI {
   showAbility() { this.el.abilityBtn.classList.remove('hidden'); }
   hideAbility() { this.el.abilityBtn.classList.add('hidden'); }
 
+  // Pause overlay — sync the controls to current settings, then show.
+  showPause(game) {
+    this.el.setVolume.value = game.settings.volume;
+    this.el.setShake.checked = game.settings.shake;
+    this.el.pauseScreen.classList.remove('hidden');
+  }
+  hidePause() { this.el.pauseScreen.classList.add('hidden'); }
+
   updateAbility(player) {
     const a = player.ability;
     this.el.abilityIcon.textContent = a.icon;
@@ -335,6 +348,7 @@ export class UI {
   showGameOver(game) {
     const p = game.player;
     this.el.summary.innerHTML = `
+      <div class="go-killedby">Killed by <b>${p.lastHitBy}</b></div>
       <div>Survived <b>${this.fmtTime(game.elapsed)}</b></div>
       <div>Level reached <b>${p.level}</b></div>
       <div>Enemies eliminated <b>${p.kills}</b></div>

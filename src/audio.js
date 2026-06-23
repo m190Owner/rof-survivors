@@ -70,9 +70,15 @@ export class AudioManager {
 
   setMuted(muted) {
     this.enabled = !muted;
-    if (this.master) this.master.gain.value = muted ? 0 : 0.6;
+    if (this.master) this.master.gain.value = muted ? 0 : this.baseVolume ?? 0.6;
   }
   toggleMute() { this.setMuted(this.enabled); return !this.enabled; }
+
+  // Master volume 0..1 (mapped to a sane ceiling). Persists via settings.
+  setMasterVolume(v) {
+    this.baseVolume = Math.max(0, Math.min(1, v)) * 0.9;
+    if (this.master && this.enabled) this.master.gain.value = this.baseVolume;
+  }
 
   _makeNoise(seconds) {
     const len = Math.floor(this.ctx.sampleRate * seconds);
