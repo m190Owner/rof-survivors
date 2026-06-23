@@ -54,6 +54,10 @@ export class Player {
 
     // What last damaged the player — shown on the game-over screen.
     this.lastHitBy = 'the swarm';
+
+    // Loop reward: a character-matched airstrike, +1 charge per biome cycle (E).
+    this.loopPower = charDef.loopPower;
+    this.loopCharges = 0;
   }
 
   // Swap a base weapon for its evolved variant in place.

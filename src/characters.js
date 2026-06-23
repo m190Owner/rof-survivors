@@ -25,6 +25,11 @@ export const CHARACTER_DEFS = {
         g.shakeCamera(4);
       },
     },
+    // Loop reward (earned each time you clear all four biomes; press E).
+    loopPower: {
+      name: 'Strafing Run', icon: '✈️',
+      pattern: 'sweep', planes: 1, count: 16, radius: 72, damage: 130, durationMs: 1700,
+    },
   },
 
   heavy: {
@@ -49,6 +54,10 @@ export const CHARACTER_DEFS = {
         g.shakeCamera(8);
       },
     },
+    loopPower: {
+      name: 'Artillery Barrage', icon: '💣',
+      pattern: 'scatter', count: 22, radius: 88, damage: 170, durationMs: 2600,
+    },
   },
 
   demo: {
@@ -72,6 +81,10 @@ export const CHARACTER_DEFS = {
         g.announce('AIRSTRIKE INBOUND');
       },
     },
+    loopPower: {
+      name: 'Carpet Bombers', icon: '🛩️',
+      pattern: 'carpet', planes: 3, count: 30, radius: 76, damage: 150, durationMs: 2400,
+    },
   },
 
   medic: {
@@ -92,6 +105,10 @@ export const CHARACTER_DEFS = {
         g.addDamageNumber(p.x, p.y - 30, Math.round(p.maxHp * 0.5), '#7fff8a', true);
         g.announce('PATCHED UP');
       },
+    },
+    loopPower: {
+      name: 'Gunship Support', icon: '🚁',
+      pattern: 'sweep', planes: 1, count: 14, radius: 66, damage: 110, durationMs: 1900, healTeam: true,
     },
   },
 };

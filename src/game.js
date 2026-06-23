@@ -61,6 +61,7 @@ export class Game {
     this.stageElapsed = 0;
     this.bossActive = false;
     this.bossRef = null;
+    this.strike = null;
     this.banner = { text: '', life: 0 };
     this.shake = { t: 0, mag: 0 };
 
@@ -95,6 +96,7 @@ export class Game {
     });
     // Ability activation via the on-screen button (mirrors Space / Q).
     this.ui.el.abilityBtn.addEventListener('click', () => { this.input.abilityRequested = true; });
+    this.ui.el.strikeBtn.addEventListener('click', () => { this.input.strikeRequested = true; });
     // Mute toggle.
     this.ui.el.muteBtn.addEventListener('click', () => {
       const muted = this.audio.toggleMute();
@@ -154,6 +156,7 @@ export class Game {
     this.stageElapsed = 0;
     this.bossActive = false;
     this.bossRef = null;
+    this.strike = null;
 
     this.ui.hideStart();
     this.ui.hideGameOver();
@@ -180,8 +183,13 @@ export class Game {
     const loopedUp = newLoop > this.loop;
     this.loop = newLoop;
     const s = STAGES[this.stage % STAGES.length];
-    if (loopedUp) this.announce(`⚔ LOOP ${this.loop + 1} — THE HORDE GROWS STRONGER`);
-    else this.announce(`▶ ${s.name}`);
+    if (loopedUp) {
+      // Each completed cycle grants a charge of the operator's signature airstrike.
+      this.player.loopCharges++;
+      this.announce(`⚔ LOOP ${this.loop + 1} — ${this.player.loopPower.name.toUpperCase()} READY (E)`);
+    } else {
+      this.announce(`▶ ${s.name}`);
+    }
     // Reward clearing a biome: top the player up a little.
     this.player.heal(this.player.maxHp * 0.25);
   }
@@ -267,6 +275,67 @@ export class Game {
         const d = Math.hypot(e.x - x, e.y - y);
         if (d <= radius + e.radius) this.damageEnemy(e, damage);
       });
+    }
+  }
+
+  // ---------------- loop power-up (airstrike) ----------------
+  // Schedule a pattern of timed bomb blasts across the visible area, with planes
+  // flying over for flavour. Damage scales with the loop so it stays relevant.
+  activateStrike() {
+    const cfg = this.player.loopPower;
+    const camX = this.camera.x, camY = this.camera.y, W = this.w, H = this.h;
+    const dur = cfg.durationMs / 1000;
+    const dmg = cfg.damage * (1 + this.loop * 0.4);
+    const blasts = [];
+    const lanes = cfg.planes || 1;
+
+    if (cfg.pattern === 'scatter') {
+      // Artillery: shells rain randomly across the screen.
+      for (let i = 0; i < cfg.count; i++) {
+        blasts.push({ x: camX + rand(40, W - 40), y: camY + rand(40, H - 40), t: rand(0, dur), r: cfg.radius, dmg });
+      }
+    } else {
+      // sweep / carpet: planes cross left→right, dropping bombs along their lane.
+      for (let L = 0; L < lanes; L++) {
+        const laneY = lanes === 1 ? this.player.y : camY + H * (0.22 + 0.56 * (L / Math.max(1, lanes - 1)));
+        this.fx.spawn({ type: 'plane', x: camX - 120, y: laneY, vx: (W + 240) / dur, life: dur + 0.3, maxLife: dur + 0.3 });
+        const per = Math.ceil(cfg.count / lanes);
+        for (let i = 0; i < per; i++) {
+          const f = per === 1 ? 0.5 : i / (per - 1);
+          blasts.push({ x: camX - 40 + f * (W + 80), y: laneY + rand(-26, 26), t: f * dur, r: cfg.radius, dmg });
+        }
+      }
+    }
+
+    this.strike = { blasts, healTeam: cfg.healTeam, soundCd: 0 };
+    this.announce(`✈ ${cfg.name.toUpperCase()}`);
+    this.audio.explosion();
+  }
+
+  updateStrike(dtMs) {
+    if (!this.strike) return;
+    const dt = dtMs / 1000;
+    this.strike.soundCd -= dtMs;
+    let pending = false;
+    for (const b of this.strike.blasts) {
+      if (b.done) continue;
+      b.t -= dt;
+      if (b.t <= 0) {
+        b.done = true;
+        this.fx.spawn({ type: 'explosion', x: b.x, y: b.y, radius: b.r, life: 0.45, maxLife: 0.45 });
+        this.grid.queryRadius(b.x, b.y, b.r, (e) => {
+          if (e.alive && Math.hypot(e.x - b.x, e.y - b.y) <= b.r + e.radius) this.damageEnemy(e, b.dmg);
+        });
+        this.shakeCamera(4);
+        if (this.strike.soundCd <= 0) { this.audio.explosion(); this.strike.soundCd = 90; }
+      } else { pending = true; }
+    }
+    if (!pending) {
+      if (this.strike.healTeam) {
+        this.player.heal(this.player.maxHp * 0.3);
+        for (const m of this.team.members) if (m.alive) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5);
+      }
+      this.strike = null;
     }
   }
 
@@ -393,6 +462,13 @@ export class Game {
       this.input.abilityRequested = false;
       if (p.tryActivateAbility(this)) this.audio.ability();
     }
+
+    // --- loop power-up (airstrike, charge-based) ---
+    if (this.input.strikeRequested) {
+      this.input.strikeRequested = false;
+      if (p.loopCharges > 0 && !this.strike) { p.loopCharges--; this.activateStrike(); }
+    }
+    this.updateStrike(dtMs);
 
     // --- player movement ---
     this.input.update();
@@ -548,6 +624,8 @@ export class Game {
       } else if (f.type === 'spark' || f.type === 'burst') {
         f.x += f.vx * dt; f.y += f.vy * dt;
         f.vx *= 0.82; f.vy *= 0.82;
+      } else if (f.type === 'plane') {
+        f.x += f.vx * dt;
       }
     }
 
@@ -729,7 +807,7 @@ export class Game {
     }
 
     // keep HUD in sync
-    if (this.state !== STATE.OVER) { this.ui.updateHud(this); this.ui.updateAbility(this.player); }
+    if (this.state !== STATE.OVER) { this.ui.updateHud(this); this.ui.updateAbility(this.player); this.ui.updateStrike(this.player); }
   }
 
   // Draw a sprite centered at world (x,y) at its logical size (no rotation).
@@ -884,6 +962,21 @@ export class Game {
         ctx.globalAlpha = 0.85;
         ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,80,50,0.9)';
         ctx.strokeRect(0, -f.width / 2, f.length, f.width);
+        ctx.restore();
+      } else if (f.type === 'plane') {
+        // Top-down fighter passing over: shadow offset below, body pointing +x.
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(f.x - 6, f.y + 22, 18, 6, 0, 0, TAU); ctx.fill();
+        ctx.translate(f.x, f.y);
+        ctx.fillStyle = '#3b4a2e';
+        ctx.beginPath(); // fuselage
+        ctx.moveTo(20, 0); ctx.lineTo(-14, 6); ctx.lineTo(-14, -6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#2c3722';
+        ctx.fillRect(-8, -16, 6, 32); // wings
+        ctx.fillStyle = '#222b1a';
+        ctx.fillRect(-14, -9, 4, 18); // tail
         ctx.restore();
       } else if (f.type === 'spark') {
         ctx.save();

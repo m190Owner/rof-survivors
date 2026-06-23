@@ -33,6 +33,10 @@ export class UI {
       abilityIcon: document.getElementById('ability-icon'),
       abilityCd: document.getElementById('ability-cd'),
       abilityName: document.getElementById('ability-name'),
+      strikeBtn: document.getElementById('strike-btn'),
+      strikeIcon: document.getElementById('strike-icon'),
+      strikeCount: document.getElementById('strike-count'),
+      strikeName: document.getElementById('strike-name'),
       muteBtn: document.getElementById('mute-btn'),
       lbStartList: document.getElementById('lb-start-list'),
       lbGoList: document.getElementById('lb-go-list'),
@@ -258,7 +262,21 @@ export class UI {
   }
 
   showAbility() { this.el.abilityBtn.classList.remove('hidden'); }
-  hideAbility() { this.el.abilityBtn.classList.add('hidden'); }
+  hideAbility() { this.el.abilityBtn.classList.add('hidden'); this.el.strikeBtn.classList.add('hidden'); }
+
+  // Loop power-up button: visible only once a charge is banked.
+  updateStrike(player) {
+    const p = player;
+    if (p.loopPower && p.loopCharges > 0) {
+      this.el.strikeBtn.classList.remove('hidden');
+      this.el.strikeBtn.classList.toggle('ready', !this._strikeActive);
+      this.el.strikeIcon.textContent = p.loopPower.icon;
+      this.el.strikeName.textContent = p.loopPower.name;
+      this.el.strikeCount.textContent = `×${p.loopCharges}`;
+    } else {
+      this.el.strikeBtn.classList.add('hidden');
+    }
+  }
 
   // Pause overlay — sync the controls to current settings, then show.
   showPause(game) {

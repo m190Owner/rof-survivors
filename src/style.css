@@ -516,3 +516,29 @@ html, body {
 .settings-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--c-accent); }
 
 .go-killedby { color: #ff9a8a; font-size: 17px; margin-bottom: 2px; }
+
+/* Loop power-up (airstrike) button — sits above the ability button. */
+#strike-btn {
+  position: absolute; right: 30px; bottom: 128px;
+  width: 78px; height: 78px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #3a2b12, #1a1408);
+  border: 3px solid #c98a2a;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 16; user-select: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+#strike-btn.hidden { display: none; }
+#strike-btn.ready {
+  border-color: #ffb84b;
+  box-shadow: 0 0 22px -2px #ffb84b;
+  animation: abilityPulse 1.2s ease-in-out infinite;
+}
+#strike-icon { font-size: 26px; line-height: 1; }
+#strike-count { font-size: 13px; font-weight: 800; color: #ffd27b; }
+#strike-name { font-size: 8px; font-weight: 700; color: #e7c98a; letter-spacing: 0.5px; text-align: center; max-width: 72px; }
+#strike-key {
+  position: absolute; top: -6px; right: -6px;
+  background: #ffb84b; color: #1a1408; font-size: 11px; font-weight: 800;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}

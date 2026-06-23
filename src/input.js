@@ -7,6 +7,7 @@ export class Input {
     this.mx = 0;
     this.my = 0;
     this.abilityRequested = false; // one-shot, consumed by the game each frame
+    this.strikeRequested = false;  // loop power-up (E), consumed each frame
 
     this.joyEl = document.getElementById('joystick');
     this.knobEl = document.getElementById('joystick-knob');
@@ -30,6 +31,10 @@ export class Input {
       }
       if (k === ' ' || k === 'spacebar' || k === 'q') {
         this.abilityRequested = true;
+        e.preventDefault();
+      }
+      if (k === 'e') {
+        this.strikeRequested = true;
         e.preventDefault();
       }
     });
