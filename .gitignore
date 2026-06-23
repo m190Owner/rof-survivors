@@ -11,3 +11,6 @@ Thumbs.db
 
 # Dev capture helper (not part of the game)
 .art-src/save.php
+
+# Editor / tooling config (local only)
+.claude/
