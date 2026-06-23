@@ -419,6 +419,7 @@ export const ASSET_MANIFEST = [
   'team_medic', 'team_sergeant', 'team_lieutenant',
   'enemy_chaser', 'enemy_swarmer', 'enemy_tank', 'enemy_ranged',
   'enemy_elite', 'enemy_boss',
+  'boss_maw', 'boss_charger', 'boss_hive',
   'xp_gem', 'health', 'muzzle', 'explosion', 'shell',
   'ground',
 ];

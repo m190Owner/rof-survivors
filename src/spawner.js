@@ -3,19 +3,25 @@
 // player so there's always pressure from every side.
 
 import { DIFFICULTY } from './config.js';
+import { ENEMY_DEFS } from './enemies.js';
 import { rand, TAU, weightedPick } from './rng.js';
+
+// Bosses cycle through the roster so back-to-back bosses are different fights.
+const BOSS_ROSTER = ['boss_maw', 'boss_charger', 'boss_hive'];
 
 export class Spawner {
   constructor() {
     this.spawnTimer = 0;
     this.eliteTimer = DIFFICULTY.eliteEvery;
     this.bossTimer = DIFFICULTY.bossEvery;
+    this.bossIndex = 0;
   }
 
   reset() {
     this.spawnTimer = 0;
     this.eliteTimer = DIFFICULTY.eliteEvery;
     this.bossTimer = DIFFICULTY.bossEvery;
+    this.bossIndex = 0;
   }
 
   // Composition shifts toward tougher mixes as the run goes on.
@@ -60,8 +66,11 @@ export class Spawner {
     this.bossTimer -= dt;
     if (this.bossTimer <= 0) {
       this.bossTimer = DIFFICULTY.bossEvery;
-      this.spawnAt(game, 'boss');
-      game.announce('⚠ BOSS INCOMING ⚠');
+      const bossType = BOSS_ROSTER[this.bossIndex % BOSS_ROSTER.length];
+      this.bossIndex++;
+      this.spawnAt(game, bossType);
+      const name = ENEMY_DEFS[bossType].bossName || 'BOSS';
+      game.announce(`⚠ ${name} INCOMING ⚠`);
     }
   }
 }

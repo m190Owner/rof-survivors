@@ -206,6 +206,17 @@ export class Game {
     }
   }
 
+  // Apply AoE damage to the player + teammates (used by boss attacks).
+  damageFriendlies(x, y, radius, dmg) {
+    const p = this.player;
+    if (Math.hypot(p.x - x, p.y - y) <= radius + p.radius) {
+      if (p.takeDamage(dmg)) { this.shakeCamera(6); this.audio.playerHurt(); }
+    }
+    for (const m of this.team.members) {
+      if (m.alive && Math.hypot(m.x - x, m.y - y) <= radius + m.radius) m.takeDamage(dmg);
+    }
+  }
+
   healAround(x, y, radius, amount) {
     if (Math.hypot(this.player.x - x, this.player.y - y) <= radius) this.player.heal(amount);
     for (const m of this.team.members) {
@@ -547,7 +558,20 @@ export class Game {
       if (!e.alive) continue;
       this.drawShadow(e.x, e.y, e.radius);
       this.drawUnit(getSprite(e.def.sprite), e.x, e.y, e.angle, 1, e.flash > 0, true);
-      if (e.def.boss) this.drawHpBar(e.x, e.y - e.radius - 14, e.radius * 2, e.hp / e.maxHp, '#ff5a4a');
+      if (e.def.boss) {
+        const by = e.y - e.radius - 14;
+        this.drawHpBar(e.x, by, e.radius * 2, e.hp / e.maxHp, '#ff5a4a');
+        if (e.def.bossName) {
+          ctx.save();
+          ctx.font = '800 13px Segoe UI, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ffd23b';
+          ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+          ctx.strokeText(e.def.bossName, e.x, by - 6);
+          ctx.fillText(e.def.bossName, e.x, by - 6);
+          ctx.restore();
+        }
+      }
     }
 
     // teammates
@@ -733,6 +757,28 @@ export class Game {
         ctx.translate(f.x, f.y); ctx.rotate(f.rot);
         ctx.globalAlpha = k;
         ctx.drawImage(spr, -sz / 2, -sz / 2, sz, sz);
+        ctx.restore();
+      } else if (f.type === 'tele_circle') {
+        // Warning zone that fills toward the moment of impact (prog 0 -> 1).
+        const prog = 1 - k;
+        ctx.save();
+        ctx.fillStyle = f.color || 'rgba(255,60,40,0.5)';
+        ctx.globalAlpha = 0.22 + 0.22 * Math.abs(Math.sin(prog * 18));
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.radius * prog, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 3; ctx.strokeStyle = f.color || 'rgba(255,80,50,0.95)';
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, TAU); ctx.stroke();
+        ctx.restore();
+      } else if (f.type === 'tele_line') {
+        const prog = 1 - k;
+        ctx.save();
+        ctx.translate(f.x, f.y); ctx.rotate(f.angle);
+        ctx.globalAlpha = 0.18 + 0.2 * Math.abs(Math.sin(prog * 18));
+        ctx.fillStyle = 'rgba(255,60,40,0.5)';
+        ctx.fillRect(0, -f.width / 2, f.length * prog, f.width);
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,80,50,0.9)';
+        ctx.strokeRect(0, -f.width / 2, f.length, f.width);
         ctx.restore();
       } else if (f.type === 'spark') {
         ctx.save();

@@ -108,6 +108,10 @@ ENEMIES = [
     ('enemy_elite',   'body_redD.png', 'eye_psycho_light.png', 'mouth_closed_teeth.png', 'detail_red_horn_large.png', MAGENTA, 54, 0.42),
     ('enemy_tank',    'body_redF.png', 'eye_angry_red.png',   'mouth_closed_teeth.png', 'detail_red_horn_large.png', DARK,    62, 0.34),
     ('enemy_boss',    'body_redE.png', 'eye_angry_red.png',   'mouth_closed_fangs.png', 'detail_red_horn_large.png', DARK,   128, 0.40),
+    # Boss roster (large, distinct silhouettes).
+    ('boss_maw',      'body_redF.png', 'eye_angry_red.png',   'mouth_closed_teeth.png', 'detail_red_horn_large.png', DARK,   132, 0.48),
+    ('boss_charger',  'body_redB.png', 'eye_angry_red.png',   'mouth_closed_fangs.png', 'detail_red_horn_large.png', CRIMSON, 122, 0.46),
+    ('boss_hive',     'body_redC.png', 'eye_psycho_light.png', 'mouthC.png',            'detail_red_horn_small.png', MAGENTA, 130, 0.46),
 ]
 
 
