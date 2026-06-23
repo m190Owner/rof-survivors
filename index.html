@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>RoF Survivors — Real Firearm Auto-Battler</title>
+  <link rel="stylesheet" href="./src/style.css" />
+  <style>
+    /* Back link to the main site (logansandivar.com), shown when the game is
+       hosted as a sub-page. Top-left, themed to match the HUD; the in-game
+       timer is nudged right so the two never overlap. */
+    #back-to-site{
+      position:fixed; top:12px; left:14px; z-index:30;
+      display:inline-flex; align-items:center; gap:6px;
+      padding:5px 11px; border-radius:7px;
+      font:600 13px/1 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+      letter-spacing:.5px; text-decoration:none;
+      color:#c9a84a; background:rgba(12,16,10,.82);
+      border:1px solid #4a5a32; box-shadow:0 2px 8px #00000066;
+      opacity:.78; transition:opacity .15s ease, border-color .15s ease;
+    }
+    #back-to-site:hover{ opacity:1; border-color:#c9a84a; }
+    /* Shift the HUD timer clear of the back link. */
+    #timer{ margin-left:104px; }
+  </style>
+</head>
+<body>
+  <a id="back-to-site" href="/" title="Back to logansandivar.com">&#8592; Site</a>
+  <div id="game-root">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Heads-up display -->
+    <div id="hud" class="overlay-pass">
+      <div id="hud-top">
+        <div id="timer">00:00</div>
+        <div id="hud-stats">
+          <span id="stat-level">Lv 1</span>
+          <span id="stat-kills">Kills 0</span>
+          <button id="mute-btn" title="Mute / unmute">🔊</button>
+        </div>
+      </div>
+
+      <div id="xp-bar-wrap">
+        <div id="xp-bar-fill"></div>
+        <div id="xp-bar-label">XP</div>
+      </div>
+
+      <div id="hp-bar-wrap">
+        <div id="hp-bar-fill"></div>
+        <div id="hp-bar-label">100 / 100</div>
+      </div>
+
+      <div id="weapon-list"></div>
+      <div id="team-list"></div>
+    </div>
+
+    <!-- Level-up upgrade screen -->
+    <div id="levelup-screen" class="modal hidden">
+      <h1>LEVEL UP</h1>
+      <p class="sub">Choose an upgrade</p>
+      <div id="card-row"></div>
+    </div>
+
+    <!-- Game over screen -->
+    <div id="gameover-screen" class="modal hidden">
+      <h1 id="gameover-title">YOU FELL</h1>
+      <div id="run-summary"></div>
+      <!-- Submit this run to the global leaderboard (optional). -->
+      <div id="lb-submit" class="lb-submit">
+        <input id="lb-name" class="lb-input" maxlength="16" autocomplete="off"
+               spellcheck="false" placeholder="Name for the leaderboard (3-16, A-Z 0-9 _)" />
+        <button id="lb-submit-btn" class="lb-btn">Submit Score</button>
+        <div id="lb-submit-msg" class="lb-msg"></div>
+      </div>
+      <div class="lb-panel">
+        <div class="lb-title">🏆 Global Leaderboard — Longest Survival</div>
+        <ol id="lb-go-list" class="lb-list"></ol>
+      </div>
+      <button id="restart-btn">DEPLOY AGAIN</button>
+    </div>
+
+    <!-- Start screen / character select -->
+    <div id="start-screen" class="modal">
+      <h1>RoF SURVIVORS</h1>
+      <p class="sub">Every gun fires at its real-world rate of fire. Choose your operator.</p>
+      <div id="char-select"></div>
+      <p class="hint">WASD / Arrows to move &nbsp;·&nbsp; touch joystick on mobile &nbsp;·&nbsp; weapons auto-fire &nbsp;·&nbsp; SPACE = ability</p>
+      <div class="lb-panel">
+        <div class="lb-title">🏆 Global Leaderboard — Longest Survival</div>
+        <ol id="lb-start-list" class="lb-list"><li class="lb-empty">Loading…</li></ol>
+      </div>
+    </div>
+
+    <!-- Active ability button / cooldown indicator -->
+    <div id="ability-btn" class="hidden">
+      <div id="ability-cd"></div>
+      <span id="ability-icon">⚡</span>
+      <span id="ability-name">Ability</span>
+      <span id="ability-key">SPACE</span>
+    </div>
+
+    <!-- Virtual joystick (touch) -->
+    <div id="joystick" class="hidden">
+      <div id="joystick-knob"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

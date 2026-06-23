@@ -1,0 +1,461 @@
+:root {
+  --c-common: #b8c0c8;
+  --c-uncommon: #4caf50;
+  --c-rare: #2196f3;
+  --c-epic: #9c27b0;
+  --c-legendary: #ff9800;
+  --c-bg: #1a1f17;
+  --c-panel: rgba(12, 16, 10, 0.82);
+  --c-accent: #c9a84a;
+  --c-hp: #d23b3b;
+  --c-xp: #4fd1ff;
+  font-family: 'Segoe UI', 'Trebuchet MS', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #e7ead0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#game-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--c-bg);
+}
+
+/* ---------- HUD ---------- */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: 12px 16px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px #000;
+}
+
+#hud-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+#timer {
+  font-size: 30px;
+  letter-spacing: 2px;
+  color: #fff;
+}
+
+#hud-stats { display: flex; gap: 14px; font-size: 15px; color: var(--c-accent); align-items: center; }
+#mute-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  background: var(--c-panel);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+#xp-bar-wrap, #hp-bar-wrap {
+  position: relative;
+  margin-top: 8px;
+  height: 16px;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.45);
+  overflow: hidden;
+  max-width: 520px;
+}
+
+#xp-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #2aa9d6, var(--c-xp)); transition: width 80ms linear; }
+#hp-bar-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #8c1f1f, var(--c-hp)); transition: width 120ms linear; }
+
+#xp-bar-label, #hp-bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; letter-spacing: 1px; color: #fff;
+}
+
+#weapon-list, #team-list {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 560px;
+}
+
+.weapon-chip, .team-chip {
+  background: var(--c-panel);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.weapon-chip b { color: var(--c-accent); }
+.weapon-chip .rpm { color: var(--c-xp); }
+.weapon-chip.reloading { color: #ff8a8a; border-color: #ff8a8a; }
+.team-chip { color: #cfe6b8; }
+
+/* ---------- Modals ---------- */
+.modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* `safe center` keeps content centered but never clips the top when the
+     screen is too short — it falls back to top-aligned + scroll instead of
+     hiding the title/summary above the viewport. */
+  justify-content: safe center;
+  gap: 14px;
+  padding: 20px 12px;
+  overflow-y: auto;
+  background: rgba(6, 9, 5, 0.78);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+}
+.modal.hidden { display: none; }
+
+.modal h1 {
+  font-size: 52px;
+  letter-spacing: 4px;
+  color: var(--c-accent);
+  text-shadow: 0 3px 0 #000;
+}
+.modal .sub { font-size: 18px; color: #d7dcc2; }
+.modal .hint { font-size: 13px; color: #9aa389; }
+
+.modal button {
+  margin-top: 8px;
+  padding: 14px 34px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #1a1f17;
+  background: var(--c-accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #6f5a1f;
+}
+.modal button:active { transform: translateY(2px); box-shadow: 0 2px 0 #6f5a1f; }
+
+#run-summary {
+  font-size: 16px;
+  line-height: 1.9;
+  text-align: center;
+  color: #dfe3cb;
+  background: var(--c-panel);
+  padding: 16px 28px;
+  border-radius: 10px;
+}
+
+/* ---------- Global leaderboard ---------- */
+.lb-panel {
+  width: min(420px, 88vw);
+  background: var(--c-panel);
+  border: 1px solid #4a5a32;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.lb-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--c-accent);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.lb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 230px;
+  overflow-y: auto;
+}
+.lb-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 6px;
+  font-size: 14px;
+  color: #dfe3cb;
+  border-radius: 5px;
+}
+.lb-row:nth-child(odd) { background: rgba(255, 255, 255, 0.04); }
+.lb-row.lb-me { background: rgba(201, 168, 74, 0.22); outline: 1px solid var(--c-accent); }
+.lb-rank { color: var(--c-accent); font-weight: 700; text-align: right; }
+.lb-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-time { color: var(--c-xp); font-variant-numeric: tabular-nums; }
+.lb-kills { color: #9aa389; font-size: 12px; }
+.lb-empty { list-style: none; text-align: center; color: #9aa389; font-size: 13px; padding: 8px 0; }
+
+.lb-submit {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  width: min(420px, 88vw);
+}
+.lb-input {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: #f2f4e6;
+  background: rgba(6, 9, 5, 0.6);
+  border: 1px solid #4a5a32;
+  border-radius: 7px;
+  outline: none;
+}
+.lb-input:focus { border-color: var(--c-accent); }
+.lb-input:disabled { opacity: 0.6; }
+.lb-btn {
+  /* Smaller than the big .modal button (DEPLOY); overrides those rules. */
+  margin-top: 0 !important;
+  padding: 9px 18px !important;
+  font-size: 14px !important;
+  letter-spacing: 1px !important;
+  box-shadow: 0 3px 0 #6f5a1f !important;
+}
+.lb-btn:disabled { opacity: 0.55; cursor: default; }
+.lb-msg {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 13px;
+  color: #d7dcc2;
+  min-height: 16px;
+}
+
+/* ---------- Upgrade cards ---------- */
+#card-row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+.card {
+  width: 210px;
+  min-height: 260px;
+  background: #12160d;
+  border: 3px solid var(--rarity, #888);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 90ms ease, box-shadow 90ms ease;
+  box-shadow: 0 0 18px -4px var(--rarity, #888);
+}
+.card:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 0 30px -2px var(--rarity, #888); }
+
+.card .rarity-tag {
+  font-size: 12px;
+  letter-spacing: 2px;
+  font-weight: 800;
+  color: var(--rarity, #888);
+  text-transform: uppercase;
+}
+.card .card-icon { font-size: 56px; margin: 10px 0; }
+.card .card-name { font-size: 20px; font-weight: 800; color: #fff; }
+.card .card-desc { margin-top: 8px; font-size: 14px; color: #c4cbb0; line-height: 1.4; }
+.card .card-kind { margin-top: auto; font-size: 11px; color: #7e876c; letter-spacing: 1px; text-transform: uppercase; }
+
+/* ---------- Character select ---------- */
+#char-select {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 920px;
+  padding: 0 16px;
+}
+.char-card {
+  width: 200px;
+  background: #12160d;
+  border: 2px solid #3c4a28;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 90ms ease, box-shadow 90ms ease, border-color 90ms ease;
+}
+.char-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--c-accent);
+  box-shadow: 0 0 24px -6px var(--c-accent);
+}
+.char-card canvas { background: radial-gradient(circle at 50% 40%, #283019, #12160d 70%); border-radius: 10px; }
+.char-name { font-size: 18px; font-weight: 800; color: #fff; margin-top: 8px; }
+.char-blurb { font-size: 12px; color: #aab38f; margin-top: 4px; line-height: 1.35; min-height: 32px; }
+.char-weapon { font-size: 12px; color: var(--c-accent); margin-top: 8px; }
+.char-ability { font-size: 12px; color: #cfe6b8; margin-top: 6px; line-height: 1.35; }
+.char-ability b { color: #fff; }
+.char-cd { color: #8a9472; }
+
+/* ---------- Ability button / cooldown ---------- */
+#ability-btn {
+  position: absolute;
+  right: 26px;
+  bottom: 26px;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #1a2113;
+  border: 3px solid #4a5a32;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 16;
+  user-select: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+#ability-btn.hidden { display: none; }
+#ability-btn.ready {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 22px -2px var(--c-accent);
+  animation: abilityPulse 1.2s ease-in-out infinite;
+}
+@keyframes abilityPulse {
+  0%, 100% { box-shadow: 0 0 14px -2px var(--c-accent); }
+  50% { box-shadow: 0 0 30px 2px var(--c-accent); }
+}
+#ability-cd {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+}
+#ability-icon { font-size: 30px; line-height: 1; }
+#ability-name { font-size: 9px; font-weight: 700; color: #cfe6b8; margin-top: 2px; letter-spacing: 0.5px; text-align: center; max-width: 80px; }
+#ability-key { font-size: 9px; color: #8a9472; letter-spacing: 1px; }
+
+/* ---------- Virtual joystick ---------- */
+#joystick {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,255,255,0.2);
+  z-index: 15;
+  pointer-events: none;
+}
+#joystick.hidden { display: none; }
+#joystick-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 52px; height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+}
+
+/* ================= HUD & menu polish (M1) ================= */
+#hud { -webkit-font-smoothing: antialiased; }
+
+/* Timer as a glass panel with tabular numerals. */
+#timer {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(20,26,16,0.78), rgba(8,11,6,0.82));
+  border: 1px solid rgba(201,168,74,0.45);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(201,168,74,0.45);
+}
+
+/* Stat readouts (Lv / Kills) as little pills. */
+#hud-stats > span {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(12,16,10,0.72);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Refined bars: taller, glossy fill, soft glow. */
+#xp-bar-wrap, #hp-bar-wrap {
+  height: 18px;
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.55);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+}
+#xp-bar-fill, #hp-bar-fill {
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0) 55%);
+}
+#xp-bar-fill { background-color: var(--c-xp); box-shadow: 0 0 12px rgba(79,209,255,0.5); }
+#hp-bar-fill { background-color: var(--c-hp); box-shadow: 0 0 12px rgba(210,59,59,0.45); }
+#xp-bar-label, #hp-bar-label { text-shadow: 0 1px 2px #000; font-weight: 700; }
+
+/* Chips: subtle glass + depth. */
+.weapon-chip, .team-chip {
+  background: linear-gradient(180deg, rgba(20,26,16,0.74), rgba(10,13,8,0.8));
+  border-color: rgba(255,255,255,0.14);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(2px);
+}
+
+/* Modals: richer backdrop + a warm accent wash behind the title. */
+.modal {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(201,168,74,0.10), rgba(0,0,0,0) 60%),
+    rgba(6, 9, 5, 0.82);
+}
+.modal h1 {
+  text-shadow: 0 3px 0 #000, 0 0 26px rgba(201,168,74,0.5);
+}
+
+/* Big primary buttons (DEPLOY / restart): glossy gold. */
+.modal button:not(.lb-btn) {
+  background: linear-gradient(180deg, #e2c463, var(--c-accent));
+  box-shadow: 0 4px 0 #6f5a1f, 0 8px 18px rgba(0,0,0,0.5);
+}
+.modal button:not(.lb-btn):hover { filter: brightness(1.06); }
+
+/* Cards/char-cards: deeper panel, inner highlight. */
+.card, .char-card {
+  background: linear-gradient(180deg, #1a2012, #0f130b);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05),
+              0 0 18px -4px var(--rarity, transparent);
+}
