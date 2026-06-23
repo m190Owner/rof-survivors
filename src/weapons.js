@@ -15,6 +15,7 @@ export const WEAPON_DEFS = {
   glock17: {
     name: 'Glock 17', sound: 'pistol', rof: 1200, damage: 9, speed: 720, mag: 17,
     reloadMs: 1300, spread: 0.06, projectiles: 1, color: '#ffe08a', bulletLen: 9,
+    evolvesTo: 'glock18', evolveReq: { passive: 'firerate', count: 3 },
   },
   m9: {
     name: 'Beretta M9', sound: 'pistol', rof: 1100, damage: 10, speed: 720, mag: 15,
@@ -23,6 +24,7 @@ export const WEAPON_DEFS = {
   mp5: {
     name: 'MP5', sound: 'smg', rof: 800, damage: 12, speed: 780, mag: 30,
     reloadMs: 1700, spread: 0.07, projectiles: 1, color: '#fff0a0', bulletLen: 10,
+    evolvesTo: 'mp5_burst', evolveReq: { passive: 'firerate', count: 2 },
   },
   uzi: {
     name: 'Uzi', sound: 'smg', rof: 600, damage: 11, speed: 700, mag: 32,
@@ -35,18 +37,43 @@ export const WEAPON_DEFS = {
   ak47: {
     name: 'AK-47', sound: 'rifle', rof: 600, damage: 24, speed: 900, mag: 30,
     reloadMs: 2200, spread: 0.05, projectiles: 1, color: '#ffc46b', bulletLen: 13,
+    evolvesTo: 'ak47drum', evolveReq: { passive: 'magsize', count: 2 },
   },
   m4: {
     name: 'M16 / M4', sound: 'rifle', rof: 850, damage: 20, speed: 950, mag: 30,
     reloadMs: 2000, spread: 0.04, projectiles: 1, color: '#ffd27b', bulletLen: 13,
+    evolvesTo: 'm4_m203', evolveReq: { passive: 'bullets', count: 2 },
   },
   m249: {
     name: 'M249 SAW', sound: 'lmg', rof: 800, damage: 22, speed: 920, mag: 100,
     reloadMs: 4200, spread: 0.08, projectiles: 1, color: '#ffb84b', bulletLen: 14,
+    evolvesTo: 'm249_bipod', evolveReq: { passive: 'reload', count: 2 },
   },
   minigun: {
     name: 'Minigun M134', sound: 'minigun', rof: 3000, damage: 14, speed: 1000, mag: 200,
     reloadMs: 3500, spread: 0.12, projectiles: 1, color: '#ff9a3b', bulletLen: 14,
+  },
+
+  // ---- Evolved variants (unlocked via an EVOLVE card; see upgrades.js) ----
+  glock18: {
+    name: 'Glock 18 (Full-Auto)', sound: 'pistol', rof: 1500, damage: 11, speed: 760, mag: 33,
+    reloadMs: 1300, spread: 0.07, projectiles: 1, color: '#ffe9a8', bulletLen: 9, evolved: true,
+  },
+  mp5_burst: {
+    name: 'MP5 (Tri-Burst)', sound: 'smg', rof: 900, damage: 14, speed: 820, mag: 45,
+    reloadMs: 1600, spread: 0.05, projectiles: 3, color: '#fff0a0', bulletLen: 10, evolved: true,
+  },
+  ak47drum: {
+    name: 'AK-47 (Drum + AP)', sound: 'rifle', rof: 650, damage: 34, speed: 980, mag: 75,
+    reloadMs: 2400, spread: 0.045, projectiles: 1, color: '#ffc46b', bulletLen: 14, pierce: 2, evolved: true,
+  },
+  m4_m203: {
+    name: 'M4 + M203 (HE)', sound: 'rifle', rof: 850, damage: 22, speed: 980, mag: 30,
+    reloadMs: 2000, spread: 0.04, projectiles: 1, color: '#ffd27b', bulletLen: 13, blastRadius: 46, evolved: true,
+  },
+  m249_bipod: {
+    name: 'M249 (Bipod + AP)', sound: 'lmg', rof: 850, damage: 28, speed: 960, mag: 150,
+    reloadMs: 3800, spread: 0.05, projectiles: 1, color: '#ffb84b', bulletLen: 14, pierce: 1, evolved: true,
   },
 };
 
@@ -119,6 +146,9 @@ export class Weapon {
         damage: this.def.damage * player.damageMultiplier,
         color: this.def.color,
         len: this.def.bulletLen,
+        // Evolved-weapon traits (armor-piercing / high-explosive rounds).
+        pierce: this.def.pierce || 0,
+        blastRadius: this.def.blastRadius || 0,
       });
     }
     return shots;

@@ -48,6 +48,15 @@ export class Player {
     this.buffLeft = 0;               // ms remaining on the active buff
 
     this.weapons = [new Weapon(charDef.startWeapon)];
+
+    // How many times each passive upgrade has been picked — drives evolutions.
+    this.upgradeCounts = {};
+  }
+
+  // Swap a base weapon for its evolved variant in place.
+  evolveWeapon(fromId, toId) {
+    const i = this.weapons.findIndex((w) => w.id === fromId);
+    if (i !== -1) this.weapons[i] = new Weapon(toId);
   }
 
   get speed() { return this.baseSpeed * this.speedMultiplier * this.abilitySpeedMult; }

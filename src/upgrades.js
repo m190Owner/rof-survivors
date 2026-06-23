@@ -87,6 +87,18 @@ function rollRarity() {
   return weightedPick(RARITIES);
 }
 
+// Owned weapons that can evolve right now (req met, not already evolved).
+function evolvableEntries(game) {
+  const out = [];
+  for (const w of game.player.weapons) {
+    const def = WEAPON_DEFS[w.id];
+    if (!def.evolvesTo) continue;
+    const have = game.player.upgradeCounts[def.evolveReq.passive] || 0;
+    if (have >= def.evolveReq.count) out.push({ type: 'evolve', id: w.id });
+  }
+  return out;
+}
+
 // Build the list of cards a card could currently be. Stats are always eligible;
 // weapon/recruit cards only when something remains to unlock.
 function eligiblePool(game) {
@@ -99,6 +111,9 @@ function eligiblePool(game) {
   // A new weapon to unlock?
   const lockable = WEAPON_UNLOCK_ORDER.filter((w) => !game.player.ownsWeapon(w));
   if (lockable.length) pool.push({ type: 'weapon', id: lockable[0], extra: lockable });
+
+  // Any owned weapon whose evolution requirement is now met?
+  for (const e of evolvableEntries(game)) pool.push(e);
 
   // A new teammate rank to recruit (or upgrade an existing one)?
   for (const rank of TEAMMATE_UNLOCK_ORDER) {
@@ -114,6 +129,14 @@ export function generateCards(game) {
   const cards = [];
   const usedKeys = new Set();
   let guard = 0;
+
+  // Guarantee an evolution card whenever one is available — it's a milestone.
+  const evolves = evolvableEntries(game);
+  if (evolves.length) {
+    const e = evolves[(Math.random() * evolves.length) | 0];
+    usedKeys.add(`${e.type}:${e.id}`);
+    cards.push(buildCard(e, RARITIES[RARITIES.length - 1], game));
+  }
 
   while (cards.length < 3 && guard++ < 60) {
     const entry = pool[(Math.random() * pool.length) | 0];
@@ -140,7 +163,21 @@ function buildCard(entry, rarity, game) {
       kind: 'stat', id: entry.id, rarity,
       name: u.name, icon: u.icon, desc: u.desc(value),
       kindLabel: 'Upgrade',
-      apply: () => u.apply(game, value),
+      apply: () => {
+        u.apply(game, value);
+        const c = game.player.upgradeCounts;
+        c[entry.id] = (c[entry.id] || 0) + 1;
+      },
+    };
+  }
+  if (entry.type === 'evolve') {
+    const baseDef = WEAPON_DEFS[entry.id];
+    const evoDef = WEAPON_DEFS[baseDef.evolvesTo];
+    return {
+      kind: 'evolve', id: entry.id, rarity, // always passed legendary
+      name: evoDef.name, icon: '⭐', desc: `Evolve ${baseDef.name} → ${evoDef.name}`,
+      kindLabel: 'EVOLUTION',
+      apply: () => game.player.evolveWeapon(entry.id, baseDef.evolvesTo),
     };
   }
   if (entry.type === 'weapon') {
