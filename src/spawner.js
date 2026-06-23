@@ -40,11 +40,13 @@ export class Spawner {
     const dt = dtMs / 1000;
     const stage = STAGES[game.stage % STAGES.length];
 
+    const loopMul = DIFFICULTY.loopSpawn(game.loop);
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = DIFFICULTY.spawnInterval(t);
-      if (game.enemies.count < DIFFICULTY.maxEnemies(t)) {
-        const batch = DIFFICULTY.spawnBatch(t);
+      const cap = Math.min(1000, DIFFICULTY.maxEnemies(t) * loopMul);
+      if (game.enemies.count < cap) {
+        const batch = Math.round(DIFFICULTY.spawnBatch(t) * loopMul);
         for (let i = 0; i < batch; i++) this.spawnAt(game, this.pickType(game));
       }
     }

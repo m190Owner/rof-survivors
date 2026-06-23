@@ -65,6 +65,11 @@ export const DIFFICULTY = {
   spawnBatch: (t) => Math.floor(2 + t * 0.06),
   // Global HP/damage multiplier ramps slowly.
   statScale: (t) => 1 + t * 0.018,
+  // Each completed cycle through all biomes (a "loop") compounds difficulty —
+  // enemy HP/damage and spawn pressure step up, so the wall always rises and
+  // every run eventually ends. Survival time is the score.
+  loopStat: (loop) => 1 + loop * 0.6,        // +60% enemy HP/damage per loop
+  loopSpawn: (loop) => 1 + loop * 0.35,      // +35% spawn batch/cap per loop
   eliteEvery: 35,   // seconds
   bossEvery: 120,   // seconds
 };

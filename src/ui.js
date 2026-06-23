@@ -4,6 +4,7 @@
 import { WEAPON_DEFS } from './weapons.js';
 import { TEAMMATE_DEFS } from './teammates.js';
 import { CHARACTER_DEFS } from './characters.js';
+import { STAGES } from './config.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { fetchBoard, submitScore, getSavedName, saveName } from './leaderboard.js';
 import { META_UPGRADES, OPERATOR_UNLOCKS, upgradeCost, writeSave } from './save.js';
@@ -350,6 +351,7 @@ export class UI {
     this.el.summary.innerHTML = `
       <div class="go-killedby">Killed by <b>${p.lastHitBy}</b></div>
       <div>Survived <b>${this.fmtTime(game.elapsed)}</b></div>
+      <div>Reached <b>${STAGES[game.stage % STAGES.length].name}</b> · Loop <b>${game.loop + 1}</b></div>
       <div>Level reached <b>${p.level}</b></div>
       <div>Enemies eliminated <b>${p.kills}</b></div>
       <div>Firearms fielded <b>${p.weapons.length}</b></div>

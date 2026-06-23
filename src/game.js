@@ -57,6 +57,7 @@ export class Game {
     this.totalRecruited = 0;
     this.pendingLevelUps = 0;
     this.stage = 0;
+    this.loop = 0;
     this.stageElapsed = 0;
     this.bossActive = false;
     this.bossRef = null;
@@ -149,6 +150,7 @@ export class Game {
 
     // Biome / stage progression.
     this.stage = 0;
+    this.loop = 0;
     this.stageElapsed = 0;
     this.bossActive = false;
     this.bossRef = null;
@@ -173,8 +175,13 @@ export class Game {
     this.stageElapsed = 0;
     this.bossActive = false;
     this.bossRef = null;
+    // A new loop begins each time we wrap past the last biome — difficulty steps up.
+    const newLoop = Math.floor(this.stage / STAGES.length);
+    const loopedUp = newLoop > this.loop;
+    this.loop = newLoop;
     const s = STAGES[this.stage % STAGES.length];
-    this.announce(`▶ ${s.name}`);
+    if (loopedUp) this.announce(`⚔ LOOP ${this.loop + 1} — THE HORDE GROWS STRONGER`);
+    else this.announce(`▶ ${s.name}`);
     // Reward clearing a biome: top the player up a little.
     this.player.heal(this.player.maxHp * 0.25);
   }
@@ -372,7 +379,7 @@ export class Game {
     this.elapsed += dt;
     // Stop the biome timer once the boss is up, so the gate fires only once.
     if (!this.bossActive) this.stageElapsed += dt;
-    this.statScaleNow = DIFFICULTY.statScale(this.elapsed);
+    this.statScaleNow = DIFFICULTY.statScale(this.elapsed) * DIFFICULTY.loopStat(this.loop);
     if (this.banner.life > 0) this.banner.life -= dt;
     if (this.shake.t > 0) { this.shake.t -= dt; if (this.shake.t <= 0) this.shake.mag = 0; }
 
