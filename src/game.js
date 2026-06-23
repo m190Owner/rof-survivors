@@ -12,6 +12,7 @@ import { Team } from './teammates.js';
 import { Spawner } from './spawner.js';
 import { makeEnemy, resetEnemy, updateEnemy, ENEMY_DEFS } from './enemies.js';
 import { generateCards } from './upgrades.js';
+import { loadSave, writeSave, coinsForRun, applyMetaBonuses } from './save.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { CHARACTER_DEFS, CHARACTER_ORDER } from './characters.js';
 import { audio } from './audio.js';
@@ -41,6 +42,8 @@ export class Game {
     this.fx = new Pool(() => ({}), (f, s) => Object.assign(f, s));
 
     this.selectedCharacter = CHARACTER_ORDER[0];
+    this.save = loadSave();
+    this.coinsEarned = 0;
     this.state = STATE.START;
     this.elapsed = 0;
     this.statScaleNow = 1;
@@ -72,7 +75,10 @@ export class Game {
 
   bindButtons() {
     // Build the character-select screen; picking a card deploys that character.
-    this.ui.buildCharacterSelect(CHARACTER_DEFS, CHARACTER_ORDER, (id) => this.start(id));
+    this.ui.buildCharacterSelect(CHARACTER_DEFS, CHARACTER_ORDER, (id) => this.start(id), this);
+    this.ui.refreshStartMeta();
+    // Armoury (shop) from the start screen.
+    this.ui.el.shopBtn.addEventListener('click', () => this.ui.openShop(this));
     // Restart returns to character select so a new character can be chosen.
     this.ui.el.restart.addEventListener('click', () => {
       this.ui.hideGameOver();
@@ -94,6 +100,7 @@ export class Game {
     if (charId) this.selectedCharacter = charId;
     const charDef = CHARACTER_DEFS[this.selectedCharacter];
     this.player = new Player(charDef, 0, 0);
+    applyMetaBonuses(this.player, this.save); // permanent shop upgrades
     this.team = new Team();
     this.spawner = new Spawner();
     this.spawner.reset();
@@ -552,6 +559,10 @@ export class Game {
     this.audio.gameOver();
     this.ui.hideAbility();
     this.ui.hideLevelUp();
+    // Award meta-currency for the run and persist it.
+    this.coinsEarned = coinsForRun(this.elapsed, this.player.kills, this.stage);
+    this.save.coins += this.coinsEarned;
+    writeSave(this.save);
     this.ui.showGameOver(this);
   }
 

@@ -83,12 +83,27 @@
     <div id="start-screen" class="modal">
       <h1>RoF SURVIVORS</h1>
       <p class="sub">Every gun fires at its real-world rate of fire. Choose your operator.</p>
+      <div class="coin-row">
+        <span class="coin-pill">🪙 <span id="start-coins">0</span></span>
+        <button id="shop-btn" class="lb-btn">🛒 Armoury</button>
+      </div>
       <div id="char-select"></div>
       <p class="hint">WASD / Arrows to move &nbsp;·&nbsp; touch joystick on mobile &nbsp;·&nbsp; weapons auto-fire &nbsp;·&nbsp; SPACE = ability</p>
       <div class="lb-panel">
         <div class="lb-title">🏆 Global Leaderboard — Longest Survival</div>
         <ol id="lb-start-list" class="lb-list"><li class="lb-empty">Loading…</li></ol>
       </div>
+    </div>
+
+    <!-- Armoury / shop (meta-progression) -->
+    <div id="shop-screen" class="modal hidden">
+      <h1>ARMOURY</h1>
+      <p class="sub">Spend salvage on permanent upgrades &amp; operators. <span class="coin-pill">🪙 <span id="shop-coins">0</span></span></p>
+      <div class="shop-section-label">Permanent Upgrades</div>
+      <div id="shop-upgrades" class="shop-grid"></div>
+      <div class="shop-section-label">Operators</div>
+      <div id="shop-operators" class="shop-grid"></div>
+      <button id="shop-back-btn">BACK</button>
     </div>
 
     <!-- Active ability button / cooldown indicator -->

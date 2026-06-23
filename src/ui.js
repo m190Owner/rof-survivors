@@ -3,8 +3,10 @@
 
 import { WEAPON_DEFS } from './weapons.js';
 import { TEAMMATE_DEFS } from './teammates.js';
+import { CHARACTER_DEFS } from './characters.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { fetchBoard, submitScore, getSavedName, saveName } from './leaderboard.js';
+import { META_UPGRADES, OPERATOR_UNLOCKS, upgradeCost, writeSave } from './save.js';
 
 export class UI {
   constructor() {
@@ -36,6 +38,13 @@ export class UI {
       lbName: document.getElementById('lb-name'),
       lbSubmitBtn: document.getElementById('lb-submit-btn'),
       lbSubmitMsg: document.getElementById('lb-submit-msg'),
+      startCoins: document.getElementById('start-coins'),
+      shopBtn: document.getElementById('shop-btn'),
+      shopScreen: document.getElementById('shop-screen'),
+      shopCoins: document.getElementById('shop-coins'),
+      shopUpgrades: document.getElementById('shop-upgrades'),
+      shopOperators: document.getElementById('shop-operators'),
+      shopBack: document.getElementById('shop-back-btn'),
     };
 
     // The run currently shown on the game-over screen, set in showGameOver().
@@ -44,6 +53,7 @@ export class UI {
     this.el.lbName.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.submitRun();
     });
+    this.el.shopBack.addEventListener('click', () => this.closeShop());
 
     // Load the board onto the start screen, which is visible on first load.
     this.loadStartLeaderboard();
@@ -106,13 +116,17 @@ export class UI {
     this.renderBoard(this.el.lbGoList, res.leaderboard, res.your_rank, 10);
   }
 
-  // Build the character-select cards on the start screen.
-  buildCharacterSelect(defs, order, onPick) {
+  // Build the character-select cards on the start screen. `game` is used to
+  // read which operators are unlocked; locked ones route to the Armoury.
+  buildCharacterSelect(defs, order, onPick, game = null) {
+    this.game = game; // kept for shop interactions
+    const unlocked = game ? game.save.unlockedChars : order;
     this.el.charSelect.innerHTML = '';
     for (const id of order) {
       const def = defs[id];
+      const isLocked = !unlocked.includes(id);
       const card = document.createElement('div');
-      card.className = 'char-card';
+      card.className = isLocked ? 'char-card locked' : 'char-card';
 
       // sprite preview drawn from the (placeholder or real) sprite
       const preview = document.createElement('canvas');
@@ -139,7 +153,16 @@ export class UI {
 
       card.appendChild(preview);
       card.appendChild(info);
-      card.addEventListener('click', () => onPick(id));
+      if (isLocked) {
+        const cost = OPERATOR_UNLOCKS[id];
+        const lock = document.createElement('div');
+        lock.className = 'char-lock';
+        lock.innerHTML = `🔒 <span>Unlock in Armoury · 🪙 ${cost}</span>`;
+        card.appendChild(lock);
+        card.addEventListener('click', () => this.openShop(game));
+      } else {
+        card.addEventListener('click', () => onPick(id));
+      }
       this.el.charSelect.appendChild(card);
     }
   }
@@ -147,7 +170,85 @@ export class UI {
   showStart() {
     this.el.start.classList.remove('hidden');
     this.hideAbility();
+    this.refreshStartMeta();
     this.loadStartLeaderboard(); // refresh after a run so new scores show
+  }
+
+  // ---------- Armoury / shop ----------
+
+  refreshStartMeta() {
+    if (this.game && this.el.startCoins) this.el.startCoins.textContent = this.game.save.coins;
+  }
+
+  openShop(game) {
+    this.game = game;
+    this.renderShop();
+    this.el.start.classList.add('hidden');
+    this.el.shopScreen.classList.remove('hidden');
+  }
+
+  closeShop() {
+    this.el.shopScreen.classList.add('hidden');
+    // Rebuild character select so freshly unlocked operators become playable.
+    if (this.game) this.buildCharacterSelect(CHARACTER_DEFS, Object.keys(CHARACTER_DEFS), (id) => this.game.start(id), this.game);
+    this.el.start.classList.remove('hidden');
+    this.refreshStartMeta();
+  }
+
+  renderShop() {
+    const save = this.game.save;
+    this.el.shopCoins.textContent = save.coins;
+
+    // Permanent upgrades.
+    this.el.shopUpgrades.innerHTML = '';
+    for (const key of Object.keys(META_UPGRADES)) {
+      const u = META_UPGRADES[key];
+      const lvl = save.upgrades[key] || 0;
+      const maxed = lvl >= u.max;
+      const cost = maxed ? null : upgradeCost(key, lvl);
+      const afford = !maxed && save.coins >= cost;
+      const card = document.createElement('div');
+      card.className = 'shop-card';
+      card.innerHTML = `
+        <div class="shop-icon">${u.icon}</div>
+        <div class="shop-name">${u.name}</div>
+        <div class="shop-lvl">Lv ${lvl}/${u.max}</div>
+        <div class="shop-desc">${u.fmt(lvl + (maxed ? 0 : 1))}</div>
+        <button class="lb-btn shop-buy" ${maxed || !afford ? 'disabled' : ''}>${maxed ? 'MAX' : `🪙 ${cost}`}</button>`;
+      if (!maxed && afford) {
+        card.querySelector('.shop-buy').addEventListener('click', () => {
+          save.coins -= cost;
+          save.upgrades[key] = lvl + 1;
+          writeSave(save);
+          this.renderShop();
+        });
+      }
+      this.el.shopUpgrades.appendChild(card);
+    }
+
+    // Operator unlocks.
+    this.el.shopOperators.innerHTML = '';
+    for (const id of Object.keys(OPERATOR_UNLOCKS)) {
+      const def = CHARACTER_DEFS[id];
+      const owned = save.unlockedChars.includes(id);
+      const cost = OPERATOR_UNLOCKS[id];
+      const afford = !owned && save.coins >= cost;
+      const card = document.createElement('div');
+      card.className = 'shop-card';
+      card.innerHTML = `
+        <div class="shop-name">${def.name}</div>
+        <div class="shop-desc">${def.blurb}</div>
+        <button class="lb-btn shop-buy" ${owned || !afford ? 'disabled' : ''}>${owned ? 'OWNED' : `🪙 ${cost}`}</button>`;
+      if (!owned && afford) {
+        card.querySelector('.shop-buy').addEventListener('click', () => {
+          save.coins -= cost;
+          save.unlockedChars.push(id);
+          writeSave(save);
+          this.renderShop();
+        });
+      }
+      this.el.shopOperators.appendChild(card);
+    }
   }
 
   showAbility() { this.el.abilityBtn.classList.remove('hidden'); }
@@ -239,6 +340,7 @@ export class UI {
       <div>Enemies eliminated <b>${p.kills}</b></div>
       <div>Firearms fielded <b>${p.weapons.length}</b></div>
       <div>Soldiers recruited <b>${game.totalRecruited}</b></div>
+      <div class="go-coins">🪙 Salvage earned <b>+${game.coinsEarned}</b> &nbsp;·&nbsp; total <b>${game.save.coins}</b></div>
     `;
 
     // Prepare the leaderboard submission for this run.

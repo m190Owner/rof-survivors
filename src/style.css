@@ -459,3 +459,47 @@ html, body {
   box-shadow: 0 10px 26px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05),
               0 0 18px -4px var(--rarity, transparent);
 }
+
+/* ================= Armoury / meta-progression ================= */
+.coin-row { display: flex; gap: 12px; align-items: center; }
+.coin-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(201,168,74,0.16); border: 1px solid rgba(201,168,74,0.5);
+  color: #ffe9a8; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+/* Locked operator cards. */
+.char-card.locked { position: relative; cursor: pointer; filter: grayscale(0.7) brightness(0.7); }
+.char-card.locked:hover { filter: grayscale(0.3) brightness(0.85); border-color: var(--c-accent); }
+.char-lock {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  background: rgba(6,9,5,0.55); border-radius: 12px;
+  font-size: 22px; color: #ffe9a8;
+}
+.char-lock span { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
+
+.go-coins { margin-top: 6px; color: #ffe9a8; }
+
+/* Shop modal. */
+.shop-section-label {
+  font-size: 13px; font-weight: 800; letter-spacing: 2px;
+  color: var(--c-accent); text-transform: uppercase; margin-top: 6px;
+}
+.shop-grid {
+  display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+  max-width: 760px; padding: 0 12px;
+}
+.shop-card {
+  width: 150px; background: linear-gradient(180deg, #1a2012, #0f130b);
+  border: 1px solid #3c4a28; border-radius: 12px; padding: 12px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.shop-icon { font-size: 30px; }
+.shop-name { font-size: 14px; font-weight: 800; color: #fff; }
+.shop-lvl { font-size: 11px; color: var(--c-accent); letter-spacing: 1px; }
+.shop-desc { font-size: 12px; color: #c4cbb0; line-height: 1.35; min-height: 32px; }
+.shop-buy { margin-top: 6px !important; min-width: 70px; }
+.shop-buy:disabled { opacity: 0.5; cursor: default; }
