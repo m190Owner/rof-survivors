@@ -12,7 +12,7 @@ import { Team } from './teammates.js';
 import { Spawner } from './spawner.js';
 import { makeEnemy, resetEnemy, updateEnemy, ENEMY_DEFS } from './enemies.js';
 import { generateCards } from './upgrades.js';
-import { loadSave, writeSave, coinsForRun, applyMetaBonuses, loadSettings, writeSettings } from './save.js';
+import { loadSave, writeSave, coinsForRun, applyMetaBonuses, loadSettings, writeSettings, loadoutCost } from './save.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { CHARACTER_DEFS, CHARACTER_ORDER } from './characters.js';
 import { audio } from './audio.js';
@@ -136,7 +136,21 @@ export class Game {
     if (charId) this.selectedCharacter = charId;
     const charDef = CHARACTER_DEFS[this.selectedCharacter];
     this.player = new Player(charDef, 0, 0);
-    applyMetaBonuses(this.player, this.save); // permanent shop upgrades
+    applyMetaBonuses(this.player, this.save); // permanent shop + overclock upgrades
+
+    // Per-run loadout: charge salvage and apply equipped consumables (if affordable).
+    this.coinMult = 1;
+    this.reviveAvailable = false;
+    const lc = loadoutCost(this.save);
+    if (lc > 0 && this.save.coins >= lc) {
+      this.save.coins -= lc;
+      writeSave(this.save);
+      const L = this.save.loadout;
+      if (L.extraStrike) this.player.loopCharges += 1;
+      if (L.sidearm) this.player.addWeapon('m4');
+      if (L.greed) this.coinMult = 1.5;
+      if (L.revive) this.reviveAvailable = true;
+    }
     this.team = new Team();
     this.spawner = new Spawner();
     this.spawner.reset();
@@ -649,8 +663,19 @@ export class Game {
     this.camera.x = p.x - this.w / 2;
     this.camera.y = p.y - this.h / 2;
 
-    // --- death ---
-    if (p.hp <= 0) this.gameOver();
+    // --- death (Revive Kit cheats it once) ---
+    if (p.hp <= 0) {
+      if (this.reviveAvailable) {
+        this.reviveAvailable = false;
+        p.hp = p.maxHp * 0.5;
+        p.invuln = Math.max(p.invuln, 2500);
+        this.fx.spawn({ type: 'explosion', x: p.x, y: p.y, radius: 100, life: 0.5, maxLife: 0.5 });
+        this.shakeCamera(8);
+        this.announce('⚡ REVIVED');
+      } else {
+        this.gameOver();
+      }
+    }
   }
 
   // Light separation so enemies don't fully stack on one pixel.
@@ -723,7 +748,7 @@ export class Game {
     this.ui.hideAbility();
     this.ui.hideLevelUp();
     // Award meta-currency for the run and persist it.
-    this.coinsEarned = coinsForRun(this.elapsed, this.player.kills, this.stage);
+    this.coinsEarned = coinsForRun(this.elapsed, this.player.kills, this.stage, this.coinMult || 1);
     this.save.coins += this.coinsEarned;
     writeSave(this.save);
     this.ui.showGameOver(this);

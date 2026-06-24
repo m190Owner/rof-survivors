@@ -7,7 +7,7 @@ import { CHARACTER_DEFS } from './characters.js';
 import { STAGES } from './config.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { fetchBoard, submitScore, getSavedName, saveName } from './leaderboard.js';
-import { META_UPGRADES, OPERATOR_UNLOCKS, upgradeCost, writeSave } from './save.js';
+import { META_UPGRADES, OPERATOR_UNLOCKS, upgradeCost, writeSave, OVERCLOCK, overclockCost, LOADOUT, loadoutCost } from './save.js';
 
 export class UI {
   constructor() {
@@ -49,6 +49,8 @@ export class UI {
       shopCoins: document.getElementById('shop-coins'),
       shopUpgrades: document.getElementById('shop-upgrades'),
       shopOperators: document.getElementById('shop-operators'),
+      shopOverclock: document.getElementById('shop-overclock'),
+      shopLoadout: document.getElementById('shop-loadout'),
       shopBack: document.getElementById('shop-back-btn'),
       pauseScreen: document.getElementById('pause-screen'),
       resumeBtn: document.getElementById('resume-btn'),
@@ -262,6 +264,56 @@ export class UI {
       }
       this.el.shopOperators.appendChild(card);
     }
+
+    // Overclock — uncapped endgame upgrades.
+    this.el.shopOverclock.innerHTML = '';
+    for (const key of Object.keys(OVERCLOCK)) {
+      const u = OVERCLOCK[key];
+      const lvl = (save.overclock && save.overclock[key]) || 0;
+      const cost = overclockCost(key, lvl);
+      const afford = save.coins >= cost;
+      const card = document.createElement('div');
+      card.className = 'shop-card';
+      card.innerHTML = `
+        <div class="shop-icon">${u.icon}</div>
+        <div class="shop-name">${u.name}</div>
+        <div class="shop-lvl">Lv ${lvl}</div>
+        <div class="shop-desc">${u.fmt(lvl + 1)}</div>
+        <button class="lb-btn shop-buy" ${afford ? '' : 'disabled'}>🪙 ${cost}</button>`;
+      if (afford) {
+        card.querySelector('.shop-buy').addEventListener('click', () => {
+          save.coins -= cost;
+          save.overclock = save.overclock || {};
+          save.overclock[key] = lvl + 1;
+          writeSave(save);
+          this.renderShop();
+        });
+      }
+      this.el.shopOverclock.appendChild(card);
+    }
+
+    // Loadout — per-run consumables you toggle on (charged each deploy).
+    this.el.shopLoadout.innerHTML = '';
+    save.loadout = save.loadout || {};
+    for (const id of Object.keys(LOADOUT)) {
+      const it = LOADOUT[id];
+      const on = !!save.loadout[id];
+      const card = document.createElement('div');
+      card.className = on ? 'shop-card equipped' : 'shop-card';
+      card.innerHTML = `
+        <div class="shop-icon">${it.icon}</div>
+        <div class="shop-name">${it.name}</div>
+        <div class="shop-desc">${it.desc}</div>
+        <button class="lb-btn shop-buy">${on ? '✓ EQUIPPED' : `🪙 ${it.cost}/run`}</button>`;
+      card.querySelector('.shop-buy').addEventListener('click', () => {
+        save.loadout[id] = !save.loadout[id];
+        writeSave(save);
+        this.renderShop();
+      });
+      this.el.shopLoadout.appendChild(card);
+    }
+    const lc = loadoutCost(save);
+    this.el.shopCoins.textContent = `${save.coins}${lc ? `  (loadout −${lc}/run)` : ''}`;
   }
 
   showAbility() { this.el.abilityBtn.classList.remove('hidden'); }
