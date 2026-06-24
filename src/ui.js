@@ -44,6 +44,7 @@ export class UI {
       lbSubmitBtn: document.getElementById('lb-submit-btn'),
       lbSubmitMsg: document.getElementById('lb-submit-msg'),
       startCoins: document.getElementById('start-coins'),
+      startLoadout: document.getElementById('start-loadout'),
       shopBtn: document.getElementById('shop-btn'),
       shopScreen: document.getElementById('shop-screen'),
       shopCoins: document.getElementById('shop-coins'),
@@ -192,7 +193,17 @@ export class UI {
   // ---------- Armoury / shop ----------
 
   refreshStartMeta() {
-    if (this.game && this.el.startCoins) this.el.startCoins.textContent = this.game.save.coins;
+    if (!this.game || !this.el.startCoins) return;
+    this.el.startCoins.textContent = this.game.save.coins;
+    // Show the equipped per-run loadout so its state is visible before deploying.
+    const save = this.game.save;
+    const equipped = Object.keys(LOADOUT).filter((id) => save.loadout && save.loadout[id]);
+    if (equipped.length) {
+      const icons = equipped.map((id) => LOADOUT[id].icon).join(' ');
+      this.el.startLoadout.textContent = `🎒 Loadout: ${icons}  (−${loadoutCost(save)}/run)`;
+    } else {
+      this.el.startLoadout.textContent = '';
+    }
   }
 
   openShop(game) {
@@ -304,7 +315,8 @@ export class UI {
         <div class="shop-icon">${it.icon}</div>
         <div class="shop-name">${it.name}</div>
         <div class="shop-desc">${it.desc}</div>
-        <button class="lb-btn shop-buy">${on ? '✓ EQUIPPED' : `🪙 ${it.cost}/run`}</button>`;
+        <div class="shop-note">${on ? 'tap to remove' : `🪙 ${it.cost} per run`}</div>
+        <button class="lb-btn shop-buy">${on ? '✓ EQUIPPED' : 'EQUIP'}</button>`;
       card.querySelector('.shop-buy').addEventListener('click', () => {
         save.loadout[id] = !save.loadout[id];
         writeSave(save);

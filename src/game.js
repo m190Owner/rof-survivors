@@ -146,10 +146,15 @@ export class Game {
       this.save.coins -= lc;
       writeSave(this.save);
       const L = this.save.loadout;
-      if (L.extraStrike) this.player.loopCharges += 1;
-      if (L.sidearm) this.player.addWeapon('m4');
-      if (L.greed) this.coinMult = 1.5;
-      if (L.revive) this.reviveAvailable = true;
+      const applied = [];
+      if (L.extraStrike) { this.player.loopCharges += 1; applied.push('✈️'); }
+      if (L.sidearm) { this.player.addWeapon('m4'); applied.push('🔫'); }
+      if (L.greed) { this.coinMult = 1.5; applied.push('🪙'); }
+      if (L.revive) { this.reviveAvailable = true; applied.push('✚'); }
+      if (applied.length) this.pendingLoadoutBanner = `🎒 LOADOUT DEPLOYED ${applied.join(' ')}`;
+    } else if (lc > 0) {
+      // Equipped but couldn't afford it — tell the player instead of silently skipping.
+      this.pendingLoadoutBanner = `🎒 LOADOUT SKIPPED — need 🪙${lc}`;
     }
     this.team = new Team();
     this.spawner = new Spawner();
@@ -166,7 +171,10 @@ export class Game {
     this.statScaleNow = 1;
     this.totalRecruited = 0;
     this.pendingLevelUps = 0;
-    this.banner = { text: STAGES[0].name, life: 2.2 };
+    // Confirm the deployed loadout on screen (so it's never silently missing);
+    // fall back to the opening biome name.
+    this.banner = { text: this.pendingLoadoutBanner || STAGES[0].name, life: 2.6 };
+    this.pendingLoadoutBanner = null;
     this.camera = { x: -this.w / 2, y: -this.h / 2 };
 
     // Biome / stage progression.

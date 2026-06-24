@@ -504,6 +504,8 @@ html, body {
 .shop-buy { margin-top: 6px !important; min-width: 70px; }
 .shop-buy:disabled { opacity: 0.5; cursor: default; }
 .shop-card.equipped { border-color: var(--c-accent); box-shadow: 0 0 16px -4px var(--c-accent), inset 0 1px 0 rgba(255,255,255,0.05); }
+.shop-note { font-size: 10px; color: #9aa389; letter-spacing: 0.5px; }
+.loadout-summary { font-size: 13px; color: #ffe9a8; min-height: 16px; text-align: center; }
 
 /* Pause settings rows. */
 .settings-row {
