@@ -514,6 +514,7 @@ html, body {
 }
 .settings-row input[type="range"] { flex: 1; max-width: 170px; accent-color: var(--c-accent); }
 .settings-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--c-accent); }
+.settings-row .set-val { min-width: 54px; text-align: right; color: var(--c-accent); font-variant-numeric: tabular-nums; }
 
 .go-killedby { color: #ff9a8a; font-size: 17px; margin-bottom: 2px; }
 

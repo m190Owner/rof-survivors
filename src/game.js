@@ -122,6 +122,11 @@ export class Game {
       this.settings.shake = e.target.checked;
       writeSettings(this.settings);
     });
+    this.ui.el.setAuto.addEventListener('input', (e) => {
+      this.settings.autoLevel = parseInt(e.target.value, 10);
+      this.ui.el.setAutoLabel.textContent = this.ui.AUTO_LABELS[this.settings.autoLevel];
+      writeSettings(this.settings);
+    });
   }
 
   // ---------------- lifecycle ----------------
@@ -674,9 +679,24 @@ export class Game {
 
   showNextCard() {
     if (this.pendingLevelUps <= 0) { this.state = STATE.RUNNING; return; }
+    const cards = generateCards(this);
+    const mode = this.settings.autoLevel || 0;
+
+    // Auto-buy: pick a card without pausing the run.
+    if (mode > 0) {
+      const card = this.pickAutoCard(cards, mode);
+      card.apply();
+      this.pendingLevelUps--;
+      this.audio.levelUp();
+      // Brief floating label so the player sees what was chosen.
+      this.fx.spawn({ type: 'dmg', x: this.player.x, y: this.player.y - 40, value: '▲ ' + card.name, color: '#9fd0ff', vy: -42, life: 0.9, maxLife: 0.9 });
+      if (this.pendingLevelUps > 0) this.showNextCard();
+      else this.state = STATE.RUNNING;
+      return;
+    }
+
     this.state = STATE.LEVELUP;
     this.audio.levelUp();
-    const cards = generateCards(this);
     this.ui.showLevelUp(cards, (card) => {
       this.audio.uiClick();
       card.apply();
@@ -685,6 +705,16 @@ export class Game {
       if (this.pendingLevelUps > 0) this.showNextCard();
       else this.state = STATE.RUNNING;
     });
+  }
+
+  // Choose a card automatically: mode 1 = random, mode 2 = highest rarity.
+  pickAutoCard(cards, mode) {
+    if (mode === 2) {
+      let best = cards[0];
+      for (const c of cards) if (c.rarity.tier > best.rarity.tier) best = c;
+      return best;
+    }
+    return cards[(Math.random() * cards.length) | 0];
   }
 
   gameOver() {

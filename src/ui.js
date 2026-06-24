@@ -55,7 +55,10 @@ export class UI {
       quitBtn: document.getElementById('quit-btn'),
       setVolume: document.getElementById('set-volume'),
       setShake: document.getElementById('set-shake'),
+      setAuto: document.getElementById('set-auto'),
+      setAutoLabel: document.getElementById('set-auto-label'),
     };
+    this.AUTO_LABELS = ['Off', 'Random', 'Best'];
 
     // The run currently shown on the game-over screen, set in showGameOver().
     this.pendingRun = null;
@@ -282,6 +285,8 @@ export class UI {
   showPause(game) {
     this.el.setVolume.value = game.settings.volume;
     this.el.setShake.checked = game.settings.shake;
+    this.el.setAuto.value = game.settings.autoLevel || 0;
+    this.el.setAutoLabel.textContent = this.AUTO_LABELS[game.settings.autoLevel || 0];
     this.el.pauseScreen.classList.remove('hidden');
   }
   hidePause() { this.el.pauseScreen.classList.add('hidden'); }

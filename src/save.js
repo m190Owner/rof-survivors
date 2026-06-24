@@ -25,7 +25,8 @@ export const OPERATOR_UNLOCKS = { heavy: 120, demo: 160, medic: 200 };
 
 // ---- Settings (separate key; volume + screen-shake toggle) ----
 const SKEY = 'rof_settings_v1';
-const DEFAULT_SETTINGS = { volume: 0.7, shake: true };
+// autoLevel: 0 = manual (pick cards yourself), 1 = auto-pick random, 2 = auto-pick best rarity.
+const DEFAULT_SETTINGS = { volume: 0.7, shake: true, autoLevel: 0 };
 
 export function loadSettings() {
   try { return { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(SKEY)) || {}) }; }
