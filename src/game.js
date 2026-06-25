@@ -13,6 +13,8 @@ import { Spawner } from './spawner.js';
 import { makeEnemy, resetEnemy, updateEnemy, ENEMY_DEFS } from './enemies.js';
 import { generateCards } from './upgrades.js';
 import { loadSave, writeSave, coinsForRun, applyMetaBonuses, loadSettings, writeSettings, loadoutCost } from './save.js';
+import { NetSession } from './net.js';
+import { getSavedName } from './leaderboard.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { CHARACTER_DEFS, CHARACTER_ORDER } from './characters.js';
 import { audio } from './audio.js';
@@ -51,6 +53,8 @@ export class Game {
     this.save = loadSave();
     this.settings = loadSettings();
     this.coinsEarned = 0;
+    this.coopMode = false; // true while in a P2P co-op session (Phase 1: shared arena)
+    this.mp = null;        // { net, isHost, name, code, remotes:Map, sendTimer }
     this.state = STATE.START;
     this.elapsed = 0;
     this.statScaleNow = 1;
@@ -88,6 +92,12 @@ export class Game {
     this.ui.refreshStartMeta();
     // Armoury (shop) from the start screen.
     this.ui.el.shopBtn.addEventListener('click', () => this.ui.openShop(this));
+    // Co-op lobby.
+    this.ui.el.coopBtn.addEventListener('click', () => this.ui.openCoop(this));
+    this.ui.el.coopHostBtn.addEventListener('click', () => this.hostCoop());
+    this.ui.el.coopJoinBtn.addEventListener('click', () => this.joinCoop(this.ui.el.coopCodeInput.value.trim().toUpperCase()));
+    this.ui.el.coopStartBtn.addEventListener('click', () => this.hostStartCoop());
+    this.ui.el.coopLeaveBtn.addEventListener('click', () => this.leaveCoop());
     // Restart returns to character select so a new character can be chosen.
     this.ui.el.restart.addEventListener('click', () => {
       this.ui.hideGameOver();
@@ -189,6 +199,7 @@ export class Game {
     this.ui.hideGameOver();
     this.ui.hideLevelUp();
     this.ui.showAbility(this.player);
+    document.getElementById('hud').style.display = ''; // restore survival HUD
     this.state = STATE.RUNNING;
   }
 
@@ -404,6 +415,172 @@ export class Game {
     this.ui.showStart();
   }
 
+  // ================= Co-op (Phase 1: P2P shared arena) =================
+  _wireNet() {
+    const net = this.mp.net;
+    net.on('open', () => this.ui.updateLobby(net.peerCount() + 1, this.mp.isHost));
+    net.on('leave', (id) => {
+      if (this.mp) { this.mp.remotes.delete(id); this.ui.updateLobby(net.peerCount() + 1, this.mp.isHost); }
+    });
+    net.on('message', (msg, from) => this._onNetMessage(msg, from));
+  }
+
+  async hostCoop() {
+    this.mp = { net: new NetSession(), isHost: true, name: getSavedName() || 'Host', code: null, remotes: new Map(), sendTimer: 0 };
+    this._wireNet();
+    try {
+      this.mp.code = await this.mp.net.host();
+      this.ui.showCoopRoom(this.mp.code, true);
+      this.ui.updateLobby(1, true);
+    } catch (e) { this.ui.coopError('Could not host: ' + e.message); this.mp = null; }
+  }
+
+  async joinCoop(code) {
+    if (!/^[A-Z0-9]{4}$/.test(code)) { this.ui.coopError('Enter a 4-character room code'); return; }
+    this.mp = { net: new NetSession(), isHost: false, name: getSavedName() || 'Player', code, remotes: new Map(), sendTimer: 0 };
+    this._wireNet();
+    try {
+      await this.mp.net.join(code);
+      this.ui.showCoopRoom(code, false);
+      this.ui.updateLobby(this.mp.net.peerCount() + 1, false);
+    } catch (e) { this.ui.coopError('Could not join: ' + e.message); this.mp = null; }
+  }
+
+  leaveCoop() {
+    if (this.mp && this.mp.net) this.mp.net.close();
+    this.mp = null;
+    this.coopMode = false;
+    this.ui.hideCoop();
+    this.state = STATE.START;
+    this.ui.showStart();
+  }
+
+  // Host clicked START — tell everyone to drop into the shared arena.
+  hostStartCoop() {
+    if (!this.mp || !this.mp.isHost) return;
+    this.mp.net.send({ t: 'start' });
+    this.startCoop(true);
+  }
+
+  startCoop(isHost) {
+    this.audio.init();
+    const charDef = CHARACTER_DEFS[this.selectedCharacter];
+    this.player = new Player(charDef, rand(-80, 80), rand(-80, 80));
+    this.mp.isHost = isHost;
+    this.mp.remotes = new Map();
+    this.mp.sendTimer = 0;
+    this.coopMode = true;
+    this.camera = { x: this.player.x - this.w / 2, y: this.player.y - this.h / 2 };
+    this.ui.hideCoop();
+    this.ui.hideStart();
+    document.getElementById('hud').style.display = 'none'; // survival HUD not used in Phase 1 co-op
+    this.state = STATE.RUNNING;
+    this.banner = { text: '👥 CO-OP — move around together', life: 2.6 };
+  }
+
+  _onNetMessage(msg, from) {
+    if (!this.mp) return;
+    if (msg.t === 'start' && !this.mp.isHost && !this.coopMode) { this.startCoop(false); return; }
+    if (!this.coopMode) return;
+
+    if (msg.t === 'pos' && this.mp.isHost) {
+      this._setRemote(from, msg);
+    } else if (msg.t === 'roster' && !this.mp.isHost) {
+      const ids = new Set();
+      for (const pl of msg.players) {
+        if (pl.id === this.mp.net.peerId) continue;
+        ids.add(pl.id);
+        this._setRemote(pl.id, pl);
+      }
+      for (const id of [...this.mp.remotes.keys()]) if (!ids.has(id)) this.mp.remotes.delete(id);
+    }
+  }
+
+  _setRemote(id, d) {
+    let r = this.mp.remotes.get(id);
+    if (!r) { r = { x: d.x, y: d.y }; this.mp.remotes.set(id, r); }
+    r.tx = d.x; r.ty = d.y; r.a = d.a || 0; r.s = d.s || 'char_commando'; r.n = d.n || 'player';
+  }
+
+  coopUpdate(dtMs) {
+    const dt = dtMs / 1000;
+    this.input.update();
+    const p = this.player;
+    if (this.input.mx || this.input.my) {
+      p.x += this.input.mx * p.speed * dt;
+      p.y += this.input.my * p.speed * dt;
+      p.angle = Math.atan2(this.input.my, this.input.mx);
+    }
+    this.camera.x = p.x - this.w / 2;
+    this.camera.y = p.y - this.h / 2;
+    if (this.banner.life > 0) this.banner.life -= dt;
+
+    // Smooth remote players toward their last reported position.
+    for (const r of this.mp.remotes.values()) {
+      const k = Math.min(1, dt * 12);
+      r.x += (r.tx - r.x) * k; r.y += (r.ty - r.y) * k;
+    }
+
+    // Broadcast state. Joiners send their own position to the host; the host
+    // broadcasts the full roster to everyone.
+    this.mp.sendTimer -= dtMs;
+    if (this.mp.sendTimer <= 0) {
+      this.mp.sendTimer = 50;
+      const self = { id: this.mp.net.peerId, x: Math.round(p.x), y: Math.round(p.y), a: +p.angle.toFixed(2), s: p.sprite, n: this.mp.name };
+      if (this.mp.isHost) {
+        const players = [self];
+        for (const [id, r] of this.mp.remotes) players.push({ id, x: Math.round(r.tx), y: Math.round(r.ty), a: r.a, s: r.s, n: r.n });
+        this.mp.net.send({ t: 'roster', players });
+      } else {
+        this.mp.net.send({ t: 'pos', ...self });
+      }
+    }
+  }
+
+  coopRender() {
+    const ctx = this.ctx;
+    const camX = this.camera.x, camY = this.camera.y;
+    this.drawBackground(camX, camY);
+    ctx.save();
+    ctx.translate(-camX, -camY);
+    for (const r of this.mp.remotes.values()) {
+      this.drawShadow(r.x, r.y, 18);
+      this.drawUnit(getSprite(r.s) || getSprite('char_commando'), r.x, r.y, r.a || 0, 1, false);
+      this._drawName(r.n, r.x, r.y - 32);
+    }
+    const p = this.player;
+    this.drawShadow(p.x, p.y, p.radius);
+    this.drawUnit(getSprite(p.sprite), p.x, p.y, p.angle, 1, false);
+    this._drawName(this.mp.name + ' (you)', p.x, p.y - 32);
+    ctx.restore();
+    this.drawVignette();
+
+    ctx.save();
+    ctx.font = '700 16px Segoe UI, sans-serif';
+    ctx.fillStyle = '#ffe9a8'; ctx.textAlign = 'left';
+    ctx.fillText(`👥 CO-OP · ROOM ${this.mp.code} · ${this.mp.remotes.size + 1} player${this.mp.remotes.size ? 's' : ''}`, 16, 28);
+    ctx.restore();
+    if (this.banner.life > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, this.banner.life);
+      ctx.font = '800 30px Segoe UI, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd23b'; ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
+      ctx.strokeText(this.banner.text, this.w / 2, 110);
+      ctx.fillText(this.banner.text, this.w / 2, 110);
+      ctx.restore();
+    }
+  }
+
+  _drawName(name, x, y) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = '600 12px Segoe UI, sans-serif'; ctx.textAlign = 'center';
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+    ctx.strokeText(name, x, y);
+    ctx.fillStyle = '#fff'; ctx.fillText(name, x, y);
+    ctx.restore();
+  }
+
   findNearestEnemy(x, y, range) {
     let best = null, bestD = range * range;
     this.grid.queryRadius(x, y, range, (e) => {
@@ -471,6 +648,7 @@ export class Game {
   }
 
   update(dtMs) {
+    if (this.coopMode) { this.coopUpdate(dtMs); return; }
     const dt = dtMs / 1000;
     this.elapsed += dt;
     // Stop the biome timer once the boss is up, so the gate fires only once.
@@ -767,6 +945,7 @@ export class Game {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
+    if (this.coopMode) { this.coopRender(); return; }
     if (this.state === STATE.START) { this.drawBackground(0, 0); return; }
 
     let sx = 0, sy = 0;

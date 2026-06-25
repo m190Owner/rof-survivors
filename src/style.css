@@ -507,6 +507,25 @@ html, body {
 .shop-note { font-size: 10px; color: #9aa389; letter-spacing: 0.5px; }
 .loadout-summary { font-size: 13px; color: #ffe9a8; min-height: 16px; text-align: center; }
 
+/* ---------- Co-op lobby ---------- */
+.coop-op-label { font-size: 13px; color: #9aa389; letter-spacing: 1px; }
+.coop-op-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.coop-op {
+  margin-top: 0 !important; padding: 8px 14px !important; font-size: 13px !important;
+  letter-spacing: 0.5px !important; border-radius: 8px !important;
+  background: var(--c-panel) !important; color: #dfe3cb !important;
+  border: 1px solid #3c4a28 !important; box-shadow: none !important; cursor: pointer;
+}
+.coop-op.sel { border-color: var(--c-accent) !important; color: #fff !important; box-shadow: 0 0 14px -4px var(--c-accent) !important; }
+.coop-op.locked { opacity: 0.4; cursor: default; }
+.coop-join-row { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 10px; }
+#coop-code-input { width: 120px; text-transform: uppercase; text-align: center; letter-spacing: 4px; font-size: 18px; font-weight: 700; }
+.coop-code-display { font-size: 20px; color: #d7dcc2; letter-spacing: 1px; }
+.coop-code-display b { color: var(--c-accent); font-size: 30px; letter-spacing: 6px; }
+.coop-players { font-size: 15px; color: #cfe6b8; font-weight: 600; }
+#coop-setup { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#coop-room { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
 /* Pause settings rows. */
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;

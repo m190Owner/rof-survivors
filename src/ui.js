@@ -46,6 +46,20 @@ export class UI {
       startCoins: document.getElementById('start-coins'),
       startLoadout: document.getElementById('start-loadout'),
       shopBtn: document.getElementById('shop-btn'),
+      coopBtn: document.getElementById('coop-btn'),
+      coopScreen: document.getElementById('coop-screen'),
+      coopOps: document.getElementById('coop-ops'),
+      coopSetup: document.getElementById('coop-setup'),
+      coopRoom: document.getElementById('coop-room'),
+      coopRoomCode: document.getElementById('coop-room-code'),
+      coopPlayers: document.getElementById('coop-players'),
+      coopStatus: document.getElementById('coop-status'),
+      coopError: document.getElementById('coop-error'),
+      coopHostBtn: document.getElementById('coop-host-btn'),
+      coopJoinBtn: document.getElementById('coop-join-btn'),
+      coopStartBtn: document.getElementById('coop-start-btn'),
+      coopLeaveBtn: document.getElementById('coop-leave-btn'),
+      coopCodeInput: document.getElementById('coop-code-input'),
       shopScreen: document.getElementById('shop-screen'),
       shopCoins: document.getElementById('shop-coins'),
       shopUpgrades: document.getElementById('shop-upgrades'),
@@ -326,6 +340,59 @@ export class UI {
     }
     const lc = loadoutCost(save);
     this.el.shopCoins.textContent = `${save.coins}${lc ? `  (loadout −${lc}/run)` : ''}`;
+  }
+
+  // ---------- Co-op lobby ----------
+  openCoop(game) {
+    this.game = game;
+    this.buildCoopOps(game);
+    this.el.coopSetup.classList.remove('hidden');
+    this.el.coopRoom.classList.add('hidden');
+    this.el.coopStartBtn.classList.add('hidden');
+    this.el.coopError.textContent = '';
+    this.el.coopStatus.textContent = '';
+    this.el.coopCodeInput.value = '';
+    this.el.start.classList.add('hidden');
+    this.el.coopScreen.classList.remove('hidden');
+  }
+  hideCoop() { this.el.coopScreen.classList.add('hidden'); }
+
+  buildCoopOps(game) {
+    this.el.coopOps.innerHTML = '';
+    for (const id of Object.keys(CHARACTER_DEFS)) {
+      const def = CHARACTER_DEFS[id];
+      const locked = !game.save.unlockedChars.includes(id);
+      const b = document.createElement('button');
+      b.className = 'coop-op' + (id === game.selectedCharacter ? ' sel' : '') + (locked ? ' locked' : '');
+      b.textContent = def.name.replace('The ', '');
+      b.disabled = locked;
+      if (!locked) b.addEventListener('click', () => { game.selectedCharacter = id; this.buildCoopOps(game); });
+      this.el.coopOps.appendChild(b);
+    }
+  }
+
+  showCoopRoom(code, isHost) {
+    this.el.coopSetup.classList.add('hidden');
+    this.el.coopRoom.classList.remove('hidden');
+    this.el.coopRoomCode.textContent = code;
+    this.el.coopError.textContent = '';
+    if (isHost) {
+      this.el.coopStartBtn.classList.remove('hidden');
+      this.el.coopStatus.textContent = 'Share the code, then press START when everyone has joined.';
+    } else {
+      this.el.coopStartBtn.classList.add('hidden');
+      this.el.coopStatus.textContent = 'Connected. Waiting for the host to start…';
+    }
+  }
+
+  updateLobby(count) {
+    this.el.coopPlayers.textContent = `👥 ${count} player${count === 1 ? '' : 's'} connected`;
+  }
+
+  coopError(msg) {
+    this.el.coopSetup.classList.remove('hidden');
+    this.el.coopRoom.classList.add('hidden');
+    this.el.coopError.textContent = msg;
   }
 
   showAbility() { this.el.abilityBtn.classList.remove('hidden'); }

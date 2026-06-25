@@ -86,6 +86,7 @@
       <div class="coin-row">
         <span class="coin-pill">🪙 <span id="start-coins">0</span></span>
         <button id="shop-btn" class="lb-btn">🛒 Armoury</button>
+        <button id="coop-btn" class="lb-btn">👥 Co-op</button>
       </div>
       <div id="start-loadout" class="loadout-summary"></div>
       <div id="char-select"></div>
@@ -130,6 +131,29 @@
       <button id="resume-btn">RESUME</button>
       <button id="quit-btn" class="lb-btn">QUIT TO MENU</button>
       <p class="hint">Press P or Esc to resume</p>
+    </div>
+
+    <!-- Co-op lobby (peer-to-peer) -->
+    <div id="coop-screen" class="modal hidden">
+      <h1>CO-OP</h1>
+      <p class="sub">Play with friends — peer-to-peer, no server needed.</p>
+      <div class="coop-op-label">Your operator:</div>
+      <div id="coop-ops" class="coop-op-row"></div>
+      <div id="coop-setup">
+        <button id="coop-host-btn">HOST GAME</button>
+        <div class="coop-join-row">
+          <input id="coop-code-input" class="lb-input" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+          <button id="coop-join-btn" class="lb-btn">JOIN</button>
+        </div>
+      </div>
+      <div id="coop-room" class="hidden">
+        <div class="coop-code-display">ROOM <b id="coop-room-code">----</b></div>
+        <div id="coop-players" class="coop-players"></div>
+        <div id="coop-status" class="lb-msg"></div>
+        <button id="coop-start-btn" class="hidden">START GAME</button>
+      </div>
+      <div id="coop-error" class="lb-msg"></div>
+      <button id="coop-leave-btn" class="lb-btn">BACK</button>
     </div>
 
     <!-- Active ability button / cooldown indicator -->
