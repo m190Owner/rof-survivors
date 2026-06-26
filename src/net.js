@@ -61,11 +61,14 @@ export class NetSession {
     return r;
   }
 
-  // Broadcast an object to every open data channel.
+  // Broadcast an object to every open data channel. Skips channels whose send
+  // buffer is backed up so a slow link can't choke the connection.
   send(obj) {
     const s = JSON.stringify(obj);
     for (const c of this.conns.values()) {
-      if (c.dc && c.dc.readyState === 'open') { try { c.dc.send(s); } catch { /* ignore */ } }
+      if (c.dc && c.dc.readyState === 'open' && c.dc.bufferedAmount < 262144) {
+        try { c.dc.send(s); } catch { /* ignore (e.g. message too large) */ }
+      }
     }
   }
 

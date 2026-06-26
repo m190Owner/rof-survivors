@@ -583,14 +583,20 @@ export class Game {
       const p = r.player;
       pl.push({ i: id, x: Math.round(p.x), y: Math.round(p.y), a: +p.angle.toFixed(2), s: p.sprite, hp: Math.round(p.hp), mhp: Math.round(p.maxHp), lv: p.level, n: r.n, d: p.hp <= 0 ? 1 : 0 });
     }
+    // Cap entity counts so a snapshot never exceeds the data channel limit /
+    // overflows the send buffer (bosses are always included).
     const en = [];
-    for (const e of this.enemies.active) if (e.alive) en.push({ x: Math.round(e.x), y: Math.round(e.y), a: +e.angle.toFixed(2), s: e.def.sprite, r: e.radius, b: e.def.boss ? 1 : 0, hpf: e.def.boss ? +(e.hp / e.maxHp).toFixed(2) : 0 });
+    for (const e of this.enemies.active) {
+      if (!e.alive) continue;
+      if (en.length >= 160 && !e.def.boss) continue;
+      en.push({ x: Math.round(e.x), y: Math.round(e.y), a: +e.angle.toFixed(2), s: e.def.sprite, r: e.radius, b: e.def.boss ? 1 : 0, hpf: e.def.boss ? +(e.hp / e.maxHp).toFixed(2) : 0 });
+    }
     const ab = [];
-    for (const b of this.allyBullets.active) if (b.alive) ab.push({ x: Math.round(b.x), y: Math.round(b.y), a: +Math.atan2(b.vy, b.vx).toFixed(2), c: b.color, l: b.len });
+    for (const b of this.allyBullets.active) { if (!b.alive) continue; if (ab.length >= 110) break; ab.push({ x: Math.round(b.x), y: Math.round(b.y), a: +Math.atan2(b.vy, b.vx).toFixed(2), c: b.color, l: b.len }); }
     const eb = [];
-    for (const b of this.enemyBullets.active) if (b.alive) eb.push({ x: Math.round(b.x), y: Math.round(b.y), c: b.color });
+    for (const b of this.enemyBullets.active) { if (!b.alive) continue; if (eb.length >= 90) break; eb.push({ x: Math.round(b.x), y: Math.round(b.y), c: b.color }); }
     const gm = [];
-    for (const g of this.gems.active) if (g.alive) gm.push({ x: Math.round(g.x), y: Math.round(g.y) });
+    for (const g of this.gems.active) { if (!g.alive) continue; if (gm.length >= 120) break; gm.push({ x: Math.round(g.x), y: Math.round(g.y) }); }
     const pk = [];
     for (const k of this.pickups.active) if (k.alive) pk.push({ x: Math.round(k.x), y: Math.round(k.y) });
     const tm = [];
@@ -653,6 +659,15 @@ export class Game {
       ctx.restore();
     }
     this.drawVignette();
+    if (!s) {
+      ctx.save();
+      ctx.font = '800 24px Segoe UI, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffe9a8'; ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
+      ctx.strokeText('Connecting to host…', this.w / 2, this.h / 2);
+      ctx.fillText('Connecting to host…', this.w / 2, this.h / 2);
+      ctx.restore();
+      return;
+    }
     this._coopHud();
   }
 
