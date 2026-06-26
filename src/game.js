@@ -15,6 +15,8 @@ import { generateCards } from './upgrades.js';
 import { loadSave, writeSave, coinsForRun, applyMetaBonuses, loadSettings, writeSettings, loadoutCost } from './save.js';
 import { NetSession } from './net.js';
 import { getSavedName, submitScore } from './leaderboard.js';
+import { CHAPTERS } from './story.js';
+import { playStoryboard } from './storyboard.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { CHARACTER_DEFS, CHARACTER_ORDER } from './characters.js';
 import { audio } from './audio.js';
@@ -55,6 +57,10 @@ export class Game {
     this.coinsEarned = 0;
     this.coopMode = false; // true while in a P2P co-op session (Phase 1: shared arena)
     this.mp = null;        // { net, isHost, name, code, remotes:Map, sendTimer }
+    this.missionMode = false; // true during a story-mode mission
+    this.missionChapter = null;
+    this._pendingMission = null;
+    this._storyChapter = 0;
     this.state = STATE.START;
     this.elapsed = 0;
     this.statScaleNow = 1;
@@ -92,6 +98,9 @@ export class Game {
     this.ui.refreshStartMeta();
     // Armoury (shop) from the start screen.
     this.ui.el.shopBtn.addEventListener('click', () => this.ui.openShop(this));
+    // Story mode.
+    this.ui.el.storyBtn.addEventListener('click', () => this.openStory());
+    this.ui.el.chapterBackBtn.addEventListener('click', () => { this.ui.hideChapterSelect(); this.ui.showStart(); });
     // Co-op lobby.
     this.ui.el.coopBtn.addEventListener('click', () => this.ui.openCoop(this));
     this.ui.el.coopHostBtn.addEventListener('click', () => this.hostCoop());
@@ -195,6 +204,15 @@ export class Game {
     this.bossActive = false;
     this.bossRef = null;
     this.strike = null;
+
+    // Story mission: lock the run to a single biome ending in that chapter's boss.
+    this.missionMode = !!this._pendingMission;
+    this.missionChapter = this._pendingMission || null;
+    if (this._pendingMission) {
+      this.stage = this._pendingMission.biome;
+      this.banner = { text: 'MISSION · ' + this._pendingMission.sub, life: 2.6 };
+    }
+    this._pendingMission = null;
 
     this.ui.hideStart();
     this.ui.hideGameOver();
@@ -460,6 +478,40 @@ export class Game {
     this.ui.coopHideOver();
     this.state = STATE.START;
     this.ui.showStart();
+  }
+
+  // ================= Story mode =================
+  openStory() { this.ui.openStory(this); }
+
+  playChapter(idx) {
+    const ch = CHAPTERS[idx];
+    if (!ch) return;
+    this._storyChapter = idx;
+    this.ui.hideChapterSelect();
+    playStoryboard(ch.intro, () => this.startMission(ch));
+  }
+
+  startMission(ch) {
+    this._pendingMission = ch;
+    this.start(); // start() reads _pendingMission and locks the biome + boss
+  }
+
+  missionWin() {
+    const ch = CHAPTERS[this._storyChapter];
+    this.missionMode = false;
+    this.state = STATE.OVER; // freeze the sim behind the comic
+    this.ui.hideAbility();
+    document.getElementById('hud').style.display = 'none';
+    if (this._storyChapter + 1 > this.save.story) { this.save.story = this._storyChapter + 1; writeSave(this.save); }
+    playStoryboard(ch.outro, () => { this.state = STATE.START; this.ui.openStory(this); });
+  }
+
+  missionFailed() {
+    this.missionMode = false;
+    this.state = STATE.START;
+    this.ui.hideAbility();
+    document.getElementById('hud').style.display = 'none';
+    this.ui.openStory(this, true);
   }
 
   // Host clicked START — tell everyone to drop into the shared arena.
@@ -812,7 +864,10 @@ export class Game {
     }
     if (e.def.boss || e.def.elite) { this.fx.spawn({ type: 'explosion', x: e.x, y: e.y, radius: e.radius * 1.6, life: 0.5, maxLife: 0.5 }); this.shakeCamera(10); }
     // A biome boss falling advances to the next biome.
-    if (e.def.boss && this.bossActive && e === this.bossRef) this.advanceStage();
+    if (e.def.boss && this.bossActive && e === this.bossRef) {
+      if (this.missionMode) this.missionWin();
+      else this.advanceStage();
+    }
 
     // Small chance to drop a health pack (much higher for elites/bosses).
     const dropChance = e.def.boss ? 1 : e.def.elite ? 0.45 : 0.05;
@@ -1080,6 +1135,8 @@ export class Game {
         this.fx.spawn({ type: 'explosion', x: p.x, y: p.y, radius: 100, life: 0.5, maxLife: 0.5 });
         this.shakeCamera(8);
         this.announce('⚡ REVIVED');
+      } else if (this.missionMode) {
+        this.missionFailed();
       } else {
         this.gameOver();
       }

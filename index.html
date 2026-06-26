@@ -85,6 +85,7 @@
       <p class="sub">Every gun fires at its real-world rate of fire. Choose your operator.</p>
       <div class="coin-row">
         <span class="coin-pill">🪙 <span id="start-coins">0</span></span>
+        <button id="story-btn" class="lb-btn">📖 Story</button>
         <button id="shop-btn" class="lb-btn">🛒 Armoury</button>
         <button id="coop-btn" class="lb-btn">👥 Co-op</button>
       </div>
@@ -165,6 +166,29 @@
         <ol id="coop-over-board" class="lb-list"><li class="lb-empty">Loading…</li></ol>
       </div>
       <button id="coop-over-leave-btn">BACK TO MENU</button>
+    </div>
+
+    <!-- Story: chapter select -->
+    <div id="chapter-select" class="modal hidden">
+      <h1>STORY</h1>
+      <p class="sub">A four-part campaign. Beat a chapter to unlock the next.</p>
+      <div class="coop-op-label">Your operator:</div>
+      <div id="story-ops" class="coop-op-row"></div>
+      <div id="chapter-list" class="chapter-list"></div>
+      <button id="chapter-back-btn" class="lb-btn">BACK</button>
+    </div>
+
+    <!-- Story: comic storyboard player -->
+    <div id="story-screen" class="modal hidden">
+      <div id="story-panel">
+        <div id="story-stage"></div>
+        <div id="story-caption"></div>
+      </div>
+      <div id="story-controls">
+        <button id="story-skip" class="lb-btn">SKIP</button>
+        <span id="story-counter">1 / 1</span>
+        <button id="story-next">NEXT ▶</button>
+      </div>
     </div>
 
     <!-- Active ability button / cooldown indicator -->

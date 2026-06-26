@@ -10,6 +10,7 @@ const DEFAULT = {
   unlockedChars: ['commando'],
   overclock: {},         // uncapped endgame upgrades: { oc_damage: level, ... }
   loadout: {},           // equipped per-run consumables: { extraStrike: true, ... }
+  story: 0,              // highest story chapter unlocked (0 = only chapter 1)
 };
 
 // Permanent upgrades. cost(level) = round(baseCost * costMul^level).
@@ -75,9 +76,10 @@ export function loadSave() {
       unlockedChars: s.unlockedChars && s.unlockedChars.length ? s.unlockedChars : ['commando'],
       overclock: s.overclock || {},
       loadout: s.loadout || {},
+      story: s.story || 0,
     };
   } catch {
-    return { ...DEFAULT, upgrades: {}, unlockedChars: ['commando'], overclock: {}, loadout: {} };
+    return { ...DEFAULT, upgrades: {}, unlockedChars: ['commando'], overclock: {}, loadout: {}, story: 0 };
   }
 }
 

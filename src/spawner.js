@@ -62,7 +62,7 @@ export class Spawner {
     // Biome boss gate: once the stage timer elapses, summon its boss. Killing
     // the boss advances the biome (handled in game.killEnemy).
     if (!game.bossActive && game.stageElapsed >= stage.bossAfterSec) {
-      const bossType = BOSS_ROSTER[game.stage % BOSS_ROSTER.length];
+      const bossType = game.missionMode ? game.missionChapter.bossType : BOSS_ROSTER[game.stage % BOSS_ROSTER.length];
       const boss = this.spawnAt(game, bossType);
       // Co-op: a boss gets tougher with more players sharing the fight.
       if (game.coopMode) {

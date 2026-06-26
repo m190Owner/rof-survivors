@@ -8,6 +8,7 @@ import { STAGES } from './config.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { fetchBoard, submitScore, getSavedName, saveName } from './leaderboard.js';
 import { META_UPGRADES, OPERATOR_UNLOCKS, upgradeCost, writeSave, OVERCLOCK, overclockCost, LOADOUT, loadoutCost } from './save.js';
+import { CHAPTERS } from './story.js';
 
 export class UI {
   constructor() {
@@ -45,6 +46,11 @@ export class UI {
       lbSubmitMsg: document.getElementById('lb-submit-msg'),
       startCoins: document.getElementById('start-coins'),
       startLoadout: document.getElementById('start-loadout'),
+      storyBtn: document.getElementById('story-btn'),
+      chapterSelect: document.getElementById('chapter-select'),
+      chapterList: document.getElementById('chapter-list'),
+      storyOps: document.getElementById('story-ops'),
+      chapterBackBtn: document.getElementById('chapter-back-btn'),
       shopBtn: document.getElementById('shop-btn'),
       coopBtn: document.getElementById('coop-btn'),
       coopScreen: document.getElementById('coop-screen'),
@@ -360,8 +366,8 @@ export class UI {
   }
   hideCoop() { this.el.coopScreen.classList.add('hidden'); }
 
-  buildCoopOps(game) {
-    this.el.coopOps.innerHTML = '';
+  buildCoopOps(game, container = this.el.coopOps) {
+    container.innerHTML = '';
     for (const id of Object.keys(CHARACTER_DEFS)) {
       const def = CHARACTER_DEFS[id];
       const locked = !game.save.unlockedChars.includes(id);
@@ -369,10 +375,40 @@ export class UI {
       b.className = 'coop-op' + (id === game.selectedCharacter ? ' sel' : '') + (locked ? ' locked' : '');
       b.textContent = def.name.replace('The ', '');
       b.disabled = locked;
-      if (!locked) b.addEventListener('click', () => { game.selectedCharacter = id; this.buildCoopOps(game); });
-      this.el.coopOps.appendChild(b);
+      if (!locked) b.addEventListener('click', () => { game.selectedCharacter = id; this.buildCoopOps(game, container); });
+      container.appendChild(b);
     }
   }
+
+  // ---------- Story / chapter select ----------
+  openStory(game, failed = false) {
+    this.game = game;
+    this.el.start.classList.add('hidden');
+    this.buildCoopOps(game, this.el.storyOps);
+    this.el.chapterList.innerHTML = '';
+    CHAPTERS.forEach((ch, i) => {
+      const unlocked = i <= game.save.story;
+      const done = i < game.save.story;
+      const card = document.createElement('div');
+      card.className = 'chapter-card' + (unlocked ? '' : ' locked');
+      card.innerHTML = `
+        <div class="chapter-num">CHAPTER ${i + 1}${done ? ' ✓' : ''}</div>
+        <div class="chapter-title">${ch.title}</div>
+        <div class="chapter-sub">${ch.sub}</div>
+        <button class="lb-btn">${unlocked ? (done ? 'REPLAY' : 'PLAY') : '🔒 Locked'}</button>`;
+      if (unlocked) card.querySelector('button').addEventListener('click', () => game.playChapter(i));
+      this.el.chapterList.appendChild(card);
+    });
+    if (failed && this.el.chapterList.firstChild) {
+      const note = document.createElement('div');
+      note.className = 'lb-msg'; note.style.color = '#ff9a8a';
+      note.textContent = 'Mission failed — regroup and try again.';
+      this.el.chapterList.parentNode.insertBefore(note, this.el.chapterList);
+      setTimeout(() => note.remove(), 4000);
+    }
+    this.el.chapterSelect.classList.remove('hidden');
+  }
+  hideChapterSelect() { this.el.chapterSelect.classList.add('hidden'); }
 
   showCoopRoom(code, isHost) {
     this.el.coopSetup.classList.add('hidden');
