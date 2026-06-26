@@ -60,6 +60,9 @@ export class UI {
       coopStartBtn: document.getElementById('coop-start-btn'),
       coopLeaveBtn: document.getElementById('coop-leave-btn'),
       coopCodeInput: document.getElementById('coop-code-input'),
+      coopOverScreen: document.getElementById('coop-over'),
+      coopOverSummary: document.getElementById('coop-over-summary'),
+      coopOverLeave: document.getElementById('coop-over-leave-btn'),
       shopScreen: document.getElementById('shop-screen'),
       shopCoins: document.getElementById('shop-coins'),
       shopUpgrades: document.getElementById('shop-upgrades'),
@@ -394,6 +397,15 @@ export class UI {
     this.el.coopRoom.classList.add('hidden');
     this.el.coopError.textContent = msg;
   }
+
+  coopShowOver(msg) {
+    const biome = STAGES[(msg.st || 0) % STAGES.length].name;
+    this.el.coopOverSummary.innerHTML = `
+      <div>Survived <b>${this.fmtTime(msg.el || 0)}</b></div>
+      <div>Reached <b>${biome}</b> · Loop <b>${(msg.lp || 0) + 1}</b></div>`;
+    this.el.coopOverScreen.classList.remove('hidden');
+  }
+  coopHideOver() { this.el.coopOverScreen.classList.add('hidden'); }
 
   showAbility() { this.el.abilityBtn.classList.remove('hidden'); }
   hideAbility() { this.el.abilityBtn.classList.add('hidden'); this.el.strikeBtn.classList.add('hidden'); }

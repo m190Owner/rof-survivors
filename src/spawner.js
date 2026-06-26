@@ -40,11 +40,13 @@ export class Spawner {
     const dt = dtMs / 1000;
     const stage = STAGES[game.stage % STAGES.length];
 
-    const loopMul = DIFFICULTY.loopSpawn(game.loop);
+    // More players → more enemies (co-op).
+    const playerMul = game.coopMode ? 1 + (game._coopRemotePlayers().length) * 0.55 : 1;
+    const loopMul = DIFFICULTY.loopSpawn(game.loop) * playerMul;
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = DIFFICULTY.spawnInterval(t);
-      const cap = Math.min(1000, DIFFICULTY.maxEnemies(t) * loopMul);
+      const cap = Math.min(1200, DIFFICULTY.maxEnemies(t) * loopMul);
       if (game.enemies.count < cap) {
         const batch = Math.round(DIFFICULTY.spawnBatch(t) * loopMul);
         for (let i = 0; i < batch; i++) this.spawnAt(game, this.pickType(game));

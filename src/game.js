@@ -98,6 +98,7 @@ export class Game {
     this.ui.el.coopJoinBtn.addEventListener('click', () => this.joinCoop(this.ui.el.coopCodeInput.value.trim().toUpperCase()));
     this.ui.el.coopStartBtn.addEventListener('click', () => this.hostStartCoop());
     this.ui.el.coopLeaveBtn.addEventListener('click', () => this.leaveCoop());
+    this.ui.el.coopOverLeave.addEventListener('click', () => this.leaveCoop());
     // Restart returns to character select so a new character can be chosen.
     this.ui.el.restart.addEventListener('click', () => {
       this.ui.hideGameOver();
@@ -319,9 +320,11 @@ export class Game {
   // ---------------- loop power-up (airstrike) ----------------
   // Schedule a pattern of timed bomb blasts across the visible area, with planes
   // flying over for flavour. Damage scales with the loop so it stays relevant.
-  activateStrike() {
-    const cfg = this.player.loopPower;
-    const camX = this.camera.x, camY = this.camera.y, W = this.w, H = this.h;
+  activateStrike(striker = this.player) {
+    const cfg = striker.loopPower;
+    const W = this.w, H = this.h;
+    // Center the strike region on the striking player (works for any co-op player).
+    const camX = striker.x - W / 2, camY = striker.y - H / 2;
     const dur = cfg.durationMs / 1000;
     const dmg = cfg.damage * (1 + this.loop * 0.4);
     const blasts = [];
@@ -335,7 +338,7 @@ export class Game {
     } else {
       // sweep / carpet: planes cross left→right, dropping bombs along their lane.
       for (let L = 0; L < lanes; L++) {
-        const laneY = lanes === 1 ? this.player.y : camY + H * (0.22 + 0.56 * (L / Math.max(1, lanes - 1)));
+        const laneY = lanes === 1 ? striker.y : camY + H * (0.22 + 0.56 * (L / Math.max(1, lanes - 1)));
         this.fx.spawn({ type: 'plane', x: camX - 120, y: laneY, vx: (W + 240) / dur, life: dur + 0.3, maxLife: dur + 0.3 });
         const per = Math.ceil(cfg.count / lanes);
         for (let i = 0; i < per; i++) {
@@ -450,7 +453,11 @@ export class Game {
     if (this.mp && this.mp.net) this.mp.net.close();
     this.mp = null;
     this.coopMode = false;
+    this.coopOver = false;
+    this.snap = null;
+    document.getElementById('hud').style.display = '';
     this.ui.hideCoop();
+    this.ui.coopHideOver();
     this.state = STATE.START;
     this.ui.showStart();
   }
@@ -464,101 +471,219 @@ export class Game {
 
   startCoop(isHost) {
     this.audio.init();
+    this.audio.setMasterVolume(this.settings.volume);
     const charDef = CHARACTER_DEFS[this.selectedCharacter];
     this.player = new Player(charDef, rand(-80, 80), rand(-80, 80));
     this.mp.isHost = isHost;
-    this.mp.remotes = new Map();
     this.mp.sendTimer = 0;
+    this.mp.snapTimer = 0;
     this.coopMode = true;
+    this.coopOver = false;
+    this.snap = null;
     this.camera = { x: this.player.x - this.w / 2, y: this.player.y - this.h / 2 };
     this.ui.hideCoop();
     this.ui.hideStart();
-    document.getElementById('hud').style.display = 'none'; // survival HUD not used in Phase 1 co-op
+    document.getElementById('hud').style.display = 'none';
+    this.banner = { text: '👥 CO-OP — survive together!', life: 2.6 };
     this.state = STATE.RUNNING;
-    this.banner = { text: '👥 CO-OP — move around together', life: 2.6 };
+
+    if (isHost) {
+      // The full shared simulation runs on the host.
+      this.enemies.clear(); this.allyBullets.clear(); this.enemyBullets.clear();
+      this.gems.clear(); this.pickups.clear(); this.fx.clear();
+      this.team = new Team();
+      this.spawner = new Spawner();
+      this.elapsed = 0; this.statScaleNow = 1; this.stage = 0; this.loop = 0;
+      this.stageElapsed = 0; this.bossActive = false; this.bossRef = null; this.strike = null;
+      // mp.remotes from the lobby become full players once they say 'hello'.
+      for (const r of this.mp.remotes.values()) { r.input = r.input || {}; r.player = null; }
+    } else {
+      this.mp.net.send({ t: 'hello', char: this.selectedCharacter, n: this.mp.name });
+    }
   }
 
   _onNetMessage(msg, from) {
     if (!this.mp) return;
     if (msg.t === 'start' && !this.mp.isHost && !this.coopMode) { this.startCoop(false); return; }
     if (!this.coopMode) return;
-
-    if (msg.t === 'pos' && this.mp.isHost) {
-      this._setRemote(from, msg);
-    } else if (msg.t === 'roster' && !this.mp.isHost) {
-      const ids = new Set();
-      for (const pl of msg.players) {
-        if (pl.id === this.mp.net.peerId) continue;
-        ids.add(pl.id);
-        this._setRemote(pl.id, pl);
-      }
-      for (const id of [...this.mp.remotes.keys()]) if (!ids.has(id)) this.mp.remotes.delete(id);
+    if (this.mp.isHost) {
+      if (msg.t === 'hello') this._coopAddRemote(from, msg.char, msg.n);
+      else if (msg.t === 'input') { const r = this.mp.remotes.get(from); if (r) r.input = msg; }
+    } else {
+      if (msg.t === 'snap') this.snap = msg;
+      else if (msg.t === 'over') { this.coopOver = true; this.ui.coopShowOver(msg); }
     }
   }
 
-  _setRemote(id, d) {
-    let r = this.mp.remotes.get(id);
-    if (!r) { r = { x: d.x, y: d.y }; this.mp.remotes.set(id, r); }
-    r.tx = d.x; r.ty = d.y; r.a = d.a || 0; r.s = d.s || 'char_commando'; r.n = d.n || 'player';
+  _coopAddRemote(id, char, name) {
+    const def = CHARACTER_DEFS[char] || CHARACTER_DEFS.commando;
+    const p = new Player(def, this.player.x + rand(-60, 60), this.player.y + rand(-60, 60));
+    this.mp.remotes.set(id, { player: p, input: {}, n: (name || 'Player').slice(0, 16), id });
   }
 
-  coopUpdate(dtMs) {
+  // Player objects the host simulates besides itself.
+  _coopRemotePlayers() {
+    const out = [];
+    for (const r of this.mp.remotes.values()) if (r.player) out.push(r.player);
+    return out;
+  }
+
+  // Drive each remote player on the host: movement, aim, auto-fire, ability, regen.
+  _coopHostPlayers(dtMs) {
+    const dt = dtMs / 1000;
+    for (const r of this.mp.remotes.values()) {
+      const p = r.player; if (!p) continue;
+      if (p.hp <= 0) continue; // downed
+      if (p.invuln > 0) p.invuln -= dtMs;
+      if (p.hpRegen > 0) p.heal(p.hpRegen * dt);
+      p.updateAbility(dtMs);
+      const inp = r.input || {};
+      if (inp.ability) { inp.ability = 0; if (p.tryActivateAbility(this)) this.audio.ability(); }
+      if (inp.strike) { inp.strike = 0; if (p.loopCharges > 0 && !this.strike) { p.loopCharges--; this.activateStrike(p); } }
+      const mx = inp.mx || 0, my = inp.my || 0;
+      if (mx || my) { p.x += mx * p.speed * dt; p.y += my * p.speed * dt; p.moveAngle = Math.atan2(my, mx); }
+      const aim = this.findNearestEnemy(p.x, p.y, 900);
+      p.angle = aim ? Math.atan2(aim.y - p.y, aim.x - p.x) : p.moveAngle;
+      for (const w of p.weapons) {
+        const shots = w.update(dtMs, p, p.angle);
+        if (shots) {
+          const gx = p.x + Math.cos(p.angle) * (p.radius + 14), gy = p.y + Math.sin(p.angle) * (p.radius + 14);
+          this.muzzleFlash(gx, gy, p.angle); this.ejectShell(gx, gy, p.angle);
+          for (const s of shots) this.spawnAllyBullet({ x: gx, y: gy, ...s });
+        }
+      }
+    }
+  }
+
+  // Award levels to a specific player by auto-picking the best card (co-op never
+  // pauses the shared game for a card screen).
+  coopAutoLevel(player, levels) {
+    const saved = this.player;
+    this.player = player;
+    try {
+      for (let i = 0; i < levels; i++) this.pickAutoCard(generateCards(this), 2).apply();
+    } finally { this.player = saved; }
+  }
+
+  coopGameOver() {
+    if (this.coopOver) return;
+    this.coopOver = true;
+    if (this.mp.isHost) this.mp.net.send({ t: 'over', el: Math.round(this.elapsed), st: this.stage, lp: this.loop });
+    this.ui.coopShowOver({ el: Math.round(this.elapsed), st: this.stage, lp: this.loop });
+  }
+
+  // Host: build and broadcast a world snapshot (~20 Hz).
+  coopBroadcast() {
+    this.mp.snapTimer -= 16;
+    if (this.mp.snapTimer > 0) return;
+    this.mp.snapTimer = 50;
+    const pl = [{ i: this.mp.net.peerId, x: Math.round(this.player.x), y: Math.round(this.player.y), a: +this.player.angle.toFixed(2), s: this.player.sprite, hp: Math.round(this.player.hp), mhp: Math.round(this.player.maxHp), lv: this.player.level, n: this.mp.name, d: this.player.hp <= 0 ? 1 : 0 }];
+    for (const [id, r] of this.mp.remotes) {
+      if (!r.player) continue;
+      const p = r.player;
+      pl.push({ i: id, x: Math.round(p.x), y: Math.round(p.y), a: +p.angle.toFixed(2), s: p.sprite, hp: Math.round(p.hp), mhp: Math.round(p.maxHp), lv: p.level, n: r.n, d: p.hp <= 0 ? 1 : 0 });
+    }
+    const en = [];
+    for (const e of this.enemies.active) if (e.alive) en.push({ x: Math.round(e.x), y: Math.round(e.y), a: +e.angle.toFixed(2), s: e.def.sprite, r: e.radius, b: e.def.boss ? 1 : 0, hpf: e.def.boss ? +(e.hp / e.maxHp).toFixed(2) : 0 });
+    const ab = [];
+    for (const b of this.allyBullets.active) if (b.alive) ab.push({ x: Math.round(b.x), y: Math.round(b.y), a: +Math.atan2(b.vy, b.vx).toFixed(2), c: b.color, l: b.len });
+    const eb = [];
+    for (const b of this.enemyBullets.active) if (b.alive) eb.push({ x: Math.round(b.x), y: Math.round(b.y), c: b.color });
+    const gm = [];
+    for (const g of this.gems.active) if (g.alive) gm.push({ x: Math.round(g.x), y: Math.round(g.y) });
+    const pk = [];
+    for (const k of this.pickups.active) if (k.alive) pk.push({ x: Math.round(k.x), y: Math.round(k.y) });
+    const tm = [];
+    for (const m of this.team.members) if (m.alive) tm.push({ x: Math.round(m.x), y: Math.round(m.y), a: +m.angle.toFixed(2), s: m.def.sprite });
+    this.mp.net.send({ t: 'snap', pl, en, ab, eb, gm, pk, tm, m: { st: this.stage, lp: this.loop, bn: this.banner.life > 0 ? this.banner.text : '' } });
+  }
+
+  // Client: send input to the host, follow my player from the latest snapshot.
+  coopClientUpdate(dtMs) {
     const dt = dtMs / 1000;
     this.input.update();
-    const p = this.player;
-    if (this.input.mx || this.input.my) {
-      p.x += this.input.mx * p.speed * dt;
-      p.y += this.input.my * p.speed * dt;
-      p.angle = Math.atan2(this.input.my, this.input.mx);
-    }
-    this.camera.x = p.x - this.w / 2;
-    this.camera.y = p.y - this.h / 2;
-    if (this.banner.life > 0) this.banner.life -= dt;
-
-    // Smooth remote players toward their last reported position.
-    for (const r of this.mp.remotes.values()) {
-      const k = Math.min(1, dt * 12);
-      r.x += (r.tx - r.x) * k; r.y += (r.ty - r.y) * k;
-    }
-
-    // Broadcast state. Joiners send their own position to the host; the host
-    // broadcasts the full roster to everyone.
     this.mp.sendTimer -= dtMs;
     if (this.mp.sendTimer <= 0) {
       this.mp.sendTimer = 50;
-      const self = { id: this.mp.net.peerId, x: Math.round(p.x), y: Math.round(p.y), a: +p.angle.toFixed(2), s: p.sprite, n: this.mp.name };
-      if (this.mp.isHost) {
-        const players = [self];
-        for (const [id, r] of this.mp.remotes) players.push({ id, x: Math.round(r.tx), y: Math.round(r.ty), a: r.a, s: r.s, n: r.n });
-        this.mp.net.send({ t: 'roster', players });
-      } else {
-        this.mp.net.send({ t: 'pos', ...self });
-      }
+      this.mp.net.send({
+        t: 'input', mx: +(this.input.mx || 0).toFixed(2), my: +(this.input.my || 0).toFixed(2),
+        ability: this._consumeInput('abilityRequested'), strike: this._consumeInput('strikeRequested'),
+      });
     }
+    if (this.snap) {
+      const me = (this.snap.pl || []).find((p) => p.i === this.mp.net.peerId);
+      if (me) { this.camera.x = me.x - this.w / 2; this.camera.y = me.y - this.h / 2; }
+      if (this.snap.m && this.snap.m.bn && this.snap.m.bn !== this.banner.text) this.banner = { text: this.snap.m.bn, life: 2.4 };
+    }
+    if (this.banner.life > 0) this.banner.life -= dt;
   }
 
-  coopRender() {
-    const ctx = this.ctx;
-    const camX = this.camera.x, camY = this.camera.y;
-    this.drawBackground(camX, camY);
-    ctx.save();
-    ctx.translate(-camX, -camY);
-    for (const r of this.mp.remotes.values()) {
-      this.drawShadow(r.x, r.y, 18);
-      this.drawUnit(getSprite(r.s) || getSprite('char_commando'), r.x, r.y, r.a || 0, 1, false);
-      this._drawName(r.n, r.x, r.y - 32);
-    }
-    const p = this.player;
-    this.drawShadow(p.x, p.y, p.radius);
-    this.drawUnit(getSprite(p.sprite), p.x, p.y, p.angle, 1, false);
-    this._drawName(this.mp.name + ' (you)', p.x, p.y - 32);
-    ctx.restore();
-    this.drawVignette();
+  _consumeInput(flag) { const v = this.input[flag]; this.input[flag] = false; return v ? 1 : 0; }
 
+  // Client: render purely from the host's snapshot.
+  coopClientRender() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.w, this.h);
+    const camX = this.camera.x, camY = this.camera.y;
+    if (this.snap) this.stage = this.snap.m.st || 0; // pick the right biome ground
+    this.drawBackground(camX, camY);
+    const s = this.snap;
+    if (s) {
+      ctx.save();
+      ctx.translate(-camX, -camY);
+      for (const g of s.gm || []) this.drawCentered(getSprite('xp_gem'), g.x, g.y);
+      for (const k of s.pk || []) this.drawCentered(getSprite('health'), k.x, k.y);
+      for (const e of s.en || []) {
+        this.drawShadow(e.x, e.y, e.r || 16);
+        this.drawUnit(getSprite(e.s) || getSprite('enemy_chaser'), e.x, e.y, e.a || 0, 1, false, true);
+        if (e.b) this.drawHpBar(e.x, e.y - (e.r || 40) - 14, (e.r || 40) * 2, e.hpf, '#ff5a4a');
+      }
+      for (const m of s.tm || []) { this.drawShadow(m.x, m.y, 16); this.drawUnit(getSprite(m.s), m.x, m.y, m.a || 0, 1, false); }
+      for (const b of s.ab || []) this._drawBulletLine(b.x, b.y, b.a, b.c, b.l);
+      for (const b of s.eb || []) { ctx.fillStyle = b.c || '#ff5bd0'; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, TAU); ctx.fill(); }
+      for (const p of s.pl || []) {
+        const me = p.i === this.mp.net.peerId;
+        this.drawShadow(p.x, p.y, 18);
+        ctx.save(); if (p.d) ctx.globalAlpha = 0.4;
+        this.drawUnit(getSprite(p.s) || getSprite('char_commando'), p.x, p.y, p.a || 0, 1, false);
+        ctx.restore();
+        this._drawName(me ? p.n + ' (you)' : p.n, p.x, p.y - 32);
+        this.drawHpBar(p.x, p.y - 26, 34, p.mhp ? p.hp / p.mhp : 0, me ? '#7fff8a' : '#7fd06b');
+      }
+      ctx.restore();
+    }
+    this.drawVignette();
+    this._coopHud();
+  }
+
+  _drawBulletLine(x, y, a, color, len) {
+    const ctx = this.ctx;
     ctx.save();
-    ctx.font = '700 16px Segoe UI, sans-serif';
-    ctx.fillStyle = '#ffe9a8'; ctx.textAlign = 'left';
-    ctx.fillText(`👥 CO-OP · ROOM ${this.mp.code} · ${this.mp.remotes.size + 1} player${this.mp.remotes.size ? 's' : ''}`, 16, 28);
+    ctx.translate(x, y); ctx.rotate(a || 0);
+    ctx.strokeStyle = color || '#ffe08a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-(len || 10) / 2, 0); ctx.lineTo((len || 10) / 2, 0); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Co-op overlay HUD (room, player count, own HP/level) on host and client.
+  _coopHud() {
+    const ctx = this.ctx;
+    let hp = 0, mhp = 1, lv = 1;
+    if (this.mp.isHost) { hp = this.player.hp; mhp = this.player.maxHp; lv = this.player.level; }
+    else if (this.snap) { const me = (this.snap.pl || []).find((p) => p.i === this.mp.net.peerId); if (me) { hp = me.hp; mhp = me.mhp; lv = me.lv; } }
+    const count = this.mp.isHost ? this._coopRemotePlayers().length + 1 : (this.snap ? (this.snap.pl || []).length : 1);
+    ctx.save();
+    ctx.font = '700 15px Segoe UI, sans-serif'; ctx.fillStyle = '#ffe9a8'; ctx.textAlign = 'left';
+    ctx.fillText(`👥 ROOM ${this.mp.code} · ${count} player${count === 1 ? '' : 's'} · Lv ${lv}`, 16, 26);
+    ctx.restore();
+    // Own HP bar bottom-center.
+    const bw = 240, bx = this.w / 2 - bw / 2, by = this.h - 30;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, bw, 12);
+    ctx.fillStyle = hp <= 0 ? '#555' : '#d23b3b'; ctx.fillRect(bx, by, bw * Math.max(0, hp / mhp), 12);
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 12);
+    ctx.fillStyle = '#fff'; ctx.font = '700 11px Segoe UI, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(hp <= 0 ? 'DOWNED' : `${Math.max(0, Math.round(hp))} / ${Math.round(mhp)}`, this.w / 2, by + 10);
     ctx.restore();
     if (this.banner.life > 0) {
       ctx.save();
@@ -648,7 +773,9 @@ export class Game {
   }
 
   update(dtMs) {
-    if (this.coopMode) { this.coopUpdate(dtMs); return; }
+    // In co-op, only the host runs the simulation; clients just send input + render.
+    if (this.coopMode && this.mp && !this.mp.isHost) { this.coopClientUpdate(dtMs); return; }
+    if (this.coopOver) return;
     const dt = dtMs / 1000;
     this.elapsed += dt;
     // Stop the biome timer once the boss is up, so the gate fires only once.
@@ -704,11 +831,14 @@ export class Game {
       }
     }
 
+    // --- co-op: simulate remote players (host only) ---
+    if (this.coopMode) this._coopHostPlayers(dtMs);
+
     // --- teammates ---
     this.team.update(dtMs, this);
 
     // --- enemies: choose target (nearest friendly), move, contact damage ---
-    const friendlies = [p, ...this.team.members];
+    const friendlies = [p, ...(this.coopMode ? this._coopRemotePlayers() : []), ...this.team.members];
     for (const e of this.enemies.active) {
       if (!e.alive) continue;
       let target = p, bd = Infinity;
@@ -767,6 +897,14 @@ export class Game {
         if (p.takeDamage(b.damage)) { this.shakeCamera(4); this.audio.playerHurt(); }
         b.alive = false; continue;
       }
+      // vs co-op remote players
+      if (this.coopMode) {
+        let hit = false;
+        for (const rp of this._coopRemotePlayers()) {
+          if (rp.hp > 0 && (rp.x - b.x) ** 2 + (rp.y - b.y) ** 2 <= (rp.radius + 4) ** 2) { rp.takeDamage(b.damage); b.alive = false; hit = true; break; }
+        }
+        if (hit) continue;
+      }
       // vs teammates
       for (const m of this.team.members) {
         if (m.alive && (m.x - b.x) ** 2 + (m.y - b.y) ** 2 <= (m.radius + 4) ** 2) {
@@ -780,38 +918,52 @@ export class Game {
     const pr = p.pickupRange;
     let levelsGained = 0;
     let collectedXp = false;
+    // In co-op, gems home to (and are collected by) the nearest living player.
+    const xpPlayers = this.coopMode ? [p, ...this._coopRemotePlayers()].filter((q) => q.hp > 0) : null;
     for (const g of this.gems.active) {
       if (!g.alive) continue;
-      const dx = p.x - g.x, dy = p.y - g.y;
+      let owner = p;
+      if (xpPlayers && xpPlayers.length) {
+        let nd = Infinity;
+        for (const q of xpPlayers) { const dd = (q.x - g.x) ** 2 + (q.y - g.y) ** 2; if (dd < nd) { nd = dd; owner = q; } }
+      }
+      const dx = owner.x - g.x, dy = owner.y - g.y;
       const d = Math.hypot(dx, dy);
       const sp = 520 + Math.max(0, 600 - d) * 0.9; // faster when close
       g.x += dx / (d || 1) * sp * dt;
       g.y += dy / (d || 1) * sp * dt;
-      if (d < p.radius + 8) {
+      if (d < owner.radius + 8) {
         g.alive = false;
-        levelsGained += p.gainXp(g.value);
+        const lv = owner.gainXp(g.value);
         collectedXp = true;
+        if (this.coopMode) { if (lv > 0) this.coopAutoLevel(owner, lv); }
+        else levelsGained += lv;
       }
     }
     if (collectedXp) this.audio.pickupXp();
     if (levelsGained > 0) this.triggerLevelUp(levelsGained);
 
-    // --- health packs: magnet + pickup ---
+    // --- health packs: magnet + pickup (nearest living player in co-op) ---
     for (const hpk of this.pickups.active) {
       if (!hpk.alive) continue;
-      const dx = p.x - hpk.x, dy = p.y - hpk.y;
+      let owner = p;
+      if (xpPlayers && xpPlayers.length) {
+        let nd = Infinity;
+        for (const q of xpPlayers) { const dd = (q.x - hpk.x) ** 2 + (q.y - hpk.y) ** 2; if (dd < nd) { nd = dd; owner = q; } }
+      }
+      const dx = owner.x - hpk.x, dy = owner.y - hpk.y;
       const d = Math.hypot(dx, dy);
-      if (hpk.magnet || d < pr) {
+      if (hpk.magnet || d < owner.pickupRange) {
         hpk.magnet = true;
         hpk.x += dx / (d || 1) * 460 * dt;
         hpk.y += dy / (d || 1) * 460 * dt;
       }
-      if (d < p.radius + 8) {
+      if (d < owner.radius + 8) {
         hpk.alive = false;
-        const before = p.hp;
-        p.heal(hpk.heal);
-        const healed = Math.round(p.hp - before);
-        if (healed > 0) this.addDamageNumber(p.x, p.y - 28, healed, '#7fff8a');
+        const before = owner.hp;
+        owner.heal(hpk.heal);
+        const healed = Math.round(owner.hp - before);
+        if (healed > 0) this.addDamageNumber(owner.x, owner.y - 28, healed, '#7fff8a');
         this.audio.pickupHealth();
       }
     }
@@ -849,8 +1001,13 @@ export class Game {
     this.camera.x = p.x - this.w / 2;
     this.camera.y = p.y - this.h / 2;
 
-    // --- death (Revive Kit cheats it once) ---
-    if (p.hp <= 0) {
+    // --- death ---
+    if (this.coopMode) {
+      // The run ends only when every player is down; then broadcast the snapshot.
+      const anyAlive = this.player.hp > 0 || this._coopRemotePlayers().some((rp) => rp.hp > 0);
+      if (!anyAlive) this.coopGameOver();
+      this.coopBroadcast();
+    } else if (p.hp <= 0) {
       if (this.reviveAvailable) {
         this.reviveAvailable = false;
         p.hp = p.maxHp * 0.5;
@@ -945,7 +1102,7 @@ export class Game {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
-    if (this.coopMode) { this.coopRender(); return; }
+    if (this.coopMode && this.mp && !this.mp.isHost) { this.coopClientRender(); return; }
     if (this.state === STATE.START) { this.drawBackground(0, 0); return; }
 
     let sx = 0, sy = 0;
@@ -1002,6 +1159,19 @@ export class Game {
       this.drawHpBar(m.x, m.y - m.radius - 10, 30, m.hp / m.maxHp, '#7fd06b');
     }
 
+    // co-op remote players (host view)
+    if (this.coopMode) {
+      for (const r of this.mp.remotes.values()) {
+        const rp = r.player; if (!rp) continue;
+        this.drawShadow(rp.x, rp.y, 18);
+        ctx.save(); if (rp.hp <= 0) ctx.globalAlpha = 0.4;
+        this.drawUnit(getSprite(rp.sprite), rp.x, rp.y, rp.angle, 1, rp.invuln > 250);
+        ctx.restore();
+        this._drawName(r.n, rp.x, rp.y - 32);
+        this.drawHpBar(rp.x, rp.y - 26, 34, rp.maxHp ? rp.hp / rp.maxHp : 0, '#7fd06b');
+      }
+    }
+
     // player
     this.drawShadow(this.player.x, this.player.y, this.player.radius);
     // Aura while an ability buff is active (e.g. Adrenaline Rush).
@@ -1034,6 +1204,9 @@ export class Game {
 
     // screen-space vignette over the world (under HUD/banner)
     this.drawVignette();
+
+    // Co-op (host) draws its own canvas HUD; single-player uses the DOM HUD.
+    if (this.coopMode) { this._coopHud(); return; }
 
     // banner (screen space)
     if (this.banner.life > 0) {
