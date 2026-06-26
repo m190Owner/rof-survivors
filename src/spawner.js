@@ -64,6 +64,12 @@ export class Spawner {
     if (!game.bossActive && game.stageElapsed >= stage.bossAfterSec) {
       const bossType = BOSS_ROSTER[game.stage % BOSS_ROSTER.length];
       const boss = this.spawnAt(game, bossType);
+      // Co-op: a boss gets tougher with more players sharing the fight.
+      if (game.coopMode) {
+        const pc = 1 + game._coopRemotePlayers().length;
+        boss.maxHp = Math.round(boss.maxHp * (1 + (pc - 1) * 0.8));
+        boss.hp = boss.maxHp;
+      }
       game.bossActive = true;
       game.bossRef = boss;
       game.announce(`⚠ ${ENEMY_DEFS[bossType].bossName} INCOMING ⚠`);

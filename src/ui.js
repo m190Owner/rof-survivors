@@ -401,9 +401,29 @@ export class UI {
   coopShowOver(msg) {
     const biome = STAGES[(msg.st || 0) % STAGES.length].name;
     this.el.coopOverSummary.innerHTML = `
-      <div>Survived <b>${this.fmtTime(msg.el || 0)}</b></div>
+      <div>${msg.players || 2}-player squad survived <b>${this.fmtTime(msg.el || 0)}</b></div>
       <div>Reached <b>${biome}</b> · Loop <b>${(msg.lp || 0) + 1}</b></div>`;
+    const board = document.getElementById('coop-over-board');
+    if (board) {
+      this.renderBoard(board, null, null, 10);
+      fetchBoard('coop').then((b) => this._renderCoopBoard(board, b));
+    }
     this.el.coopOverScreen.classList.remove('hidden');
+  }
+
+  // Co-op board rows show the team's player count alongside survival time.
+  _renderCoopBoard(listEl, entries) {
+    if (entries === null) { listEl.innerHTML = '<li class="lb-empty">Leaderboard unavailable.</li>'; return; }
+    if (entries.length === 0) { listEl.innerHTML = '<li class="lb-empty">No co-op runs yet — be the first!</li>'; return; }
+    let html = '';
+    entries.slice(0, 10).forEach((e, i) => {
+      const name = String(e.name).replace(/[<>&]/g, '');
+      html += `<li class="lb-row"><span class="lb-rank">${i + 1}</span>` +
+        `<span class="lb-name">${name}</span>` +
+        `<span class="lb-kills">${e.players || 2}p</span>` +
+        `<span class="lb-time">${this.fmtTime(e.time)}</span></li>`;
+    });
+    listEl.innerHTML = html;
   }
   coopHideOver() { this.el.coopOverScreen.classList.add('hidden'); }
 

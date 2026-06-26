@@ -6,10 +6,10 @@
 const ENDPOINT = 'leaderboard.php';
 const NAME_KEY = 'rof_lb_name';
 
-// Fetch the top entries. Returns an array, or null if the board is unreachable.
-export async function fetchBoard() {
+// Fetch the top entries (mode: 'solo' | 'coop'). Returns an array, or null.
+export async function fetchBoard(mode = 'solo') {
   try {
-    const res = await fetch(ENDPOINT, { method: 'GET' });
+    const res = await fetch(`${ENDPOINT}?mode=${mode}`, { method: 'GET' });
     if (!res.ok) return null;
     const data = await res.json();
     return Array.isArray(data.leaderboard) ? data.leaderboard : null;
@@ -20,13 +20,14 @@ export async function fetchBoard() {
 
 // Submit a run. Returns { ok:true, your_rank, leaderboard } on success, or
 // { ok:false, error } on a handled rejection (bad name, rate limit, offline).
-export async function submitScore({ name, time, kills, level }) {
+export async function submitScore({ name, time, kills, level, mode = 'solo', players = 1 }) {
   try {
     const body = new URLSearchParams({
-      name,
+      name, mode,
       time: String(Math.max(0, Math.floor(time))),
       kills: String(Math.max(0, Math.floor(kills))),
       level: String(Math.max(1, Math.floor(level))),
+      players: String(Math.max(1, Math.floor(players))),
     });
     const res = await fetch(ENDPOINT, { method: 'POST', body });
     const data = await res.json().catch(() => ({}));

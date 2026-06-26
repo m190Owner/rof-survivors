@@ -14,7 +14,7 @@ import { makeEnemy, resetEnemy, updateEnemy, ENEMY_DEFS } from './enemies.js';
 import { generateCards } from './upgrades.js';
 import { loadSave, writeSave, coinsForRun, applyMetaBonuses, loadSettings, writeSettings, loadoutCost } from './save.js';
 import { NetSession } from './net.js';
-import { getSavedName } from './leaderboard.js';
+import { getSavedName, submitScore } from './leaderboard.js';
 import { getSprite, spriteSize } from './sprites.js';
 import { CHARACTER_DEFS, CHARACTER_ORDER } from './characters.js';
 import { audio } from './audio.js';
@@ -555,6 +555,29 @@ export class Game {
     }
   }
 
+  // Downed players are revived by a living teammate standing close for ~2.5s.
+  _coopRevives(dt) {
+    const players = [this.player, ...this._coopRemotePlayers()];
+    for (const dp of players) {
+      if (dp.hp > 0) { dp.reviveT = 0; continue; }
+      let nearby = false;
+      for (const lp of players) {
+        if (lp === dp || lp.hp <= 0) continue;
+        if ((lp.x - dp.x) ** 2 + (lp.y - dp.y) ** 2 < 56 * 56) { nearby = true; break; }
+      }
+      if (nearby) {
+        dp.reviveT = (dp.reviveT || 0) + dt;
+        if (dp.reviveT >= 2.5) {
+          dp.hp = dp.maxHp * 0.4; dp.invuln = 1500; dp.reviveT = 0;
+          this.fx.spawn({ type: 'explosion', x: dp.x, y: dp.y, radius: 60, life: 0.4, maxLife: 0.4 });
+          this.announce('⚕ REVIVED!');
+        }
+      } else {
+        dp.reviveT = Math.max(0, (dp.reviveT || 0) - dt * 0.6);
+      }
+    }
+  }
+
   // Award levels to a specific player by auto-picking the best card (co-op never
   // pauses the shared game for a card screen).
   coopAutoLevel(player, levels) {
@@ -568,8 +591,17 @@ export class Game {
   coopGameOver() {
     if (this.coopOver) return;
     this.coopOver = true;
-    if (this.mp.isHost) this.mp.net.send({ t: 'over', el: Math.round(this.elapsed), st: this.stage, lp: this.loop });
-    this.ui.coopShowOver({ el: Math.round(this.elapsed), st: this.stage, lp: this.loop });
+    const players = 1 + this._coopRemotePlayers().length;
+    const info = { el: Math.round(this.elapsed), st: this.stage, lp: this.loop, players };
+    if (this.mp.isHost) {
+      this.mp.net.send({ t: 'over', ...info });
+      // Submit the team run to the co-op leaderboard.
+      const all = [this.player, ...this._coopRemotePlayers()];
+      const kills = all.reduce((s, q) => s + (q.kills || 0), 0);
+      const level = Math.max(1, ...all.map((q) => q.level));
+      submitScore({ name: this.mp.name, time: this.elapsed, kills, level, mode: 'coop', players }).catch(() => {});
+    }
+    this.ui.coopShowOver(info);
   }
 
   // Host: build and broadcast a world snapshot (~20 Hz).
@@ -577,12 +609,13 @@ export class Game {
     this.mp.snapTimer -= 16;
     if (this.mp.snapTimer > 0) return;
     this.mp.snapTimer = 50;
-    const pl = [{ i: this.mp.net.peerId, x: Math.round(this.player.x), y: Math.round(this.player.y), a: +this.player.angle.toFixed(2), s: this.player.sprite, hp: Math.round(this.player.hp), mhp: Math.round(this.player.maxHp), lv: this.player.level, n: this.mp.name, d: this.player.hp <= 0 ? 1 : 0 }];
-    for (const [id, r] of this.mp.remotes) {
-      if (!r.player) continue;
-      const p = r.player;
-      pl.push({ i: id, x: Math.round(p.x), y: Math.round(p.y), a: +p.angle.toFixed(2), s: p.sprite, hp: Math.round(p.hp), mhp: Math.round(p.maxHp), lv: p.level, n: r.n, d: p.hp <= 0 ? 1 : 0 });
-    }
+    const snapPlayer = (p, id, name) => ({
+      i: id, x: Math.round(p.x), y: Math.round(p.y), a: +p.angle.toFixed(2), s: p.sprite,
+      hp: Math.round(p.hp), mhp: Math.round(p.maxHp), lv: p.level, n: name,
+      d: p.hp <= 0 ? 1 : 0, rv: p.hp <= 0 ? +((p.reviveT || 0) / 2.5).toFixed(2) : 0,
+    });
+    const pl = [snapPlayer(this.player, this.mp.net.peerId, this.mp.name)];
+    for (const [id, r] of this.mp.remotes) { if (r.player) pl.push(snapPlayer(r.player, id, r.n)); }
     // Cap entity counts so a snapshot never exceeds the data channel limit /
     // overflows the send buffer (bosses are always included).
     const en = [];
@@ -649,12 +682,7 @@ export class Game {
       for (const b of s.eb || []) { ctx.fillStyle = b.c || '#ff5bd0'; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, TAU); ctx.fill(); }
       for (const p of s.pl || []) {
         const me = p.i === this.mp.net.peerId;
-        this.drawShadow(p.x, p.y, 18);
-        ctx.save(); if (p.d) ctx.globalAlpha = 0.4;
-        this.drawUnit(getSprite(p.s) || getSprite('char_commando'), p.x, p.y, p.a || 0, 1, false);
-        ctx.restore();
-        this._drawName(me ? p.n + ' (you)' : p.n, p.x, p.y - 32);
-        this.drawHpBar(p.x, p.y - 26, 34, p.mhp ? p.hp / p.mhp : 0, me ? '#7fff8a' : '#7fd06b');
+        this._drawCoopPlayer(p.x, p.y, p.a, p.s, me ? p.n + ' (you)' : p.n, p.hp, p.mhp, p.d, p.rv, me);
       }
       ctx.restore();
     }
@@ -711,14 +739,35 @@ export class Game {
     }
   }
 
-  _drawName(name, x, y) {
+  _drawName(name, x, y, color = '#fff') {
     const ctx = this.ctx;
     ctx.save();
     ctx.font = '600 12px Segoe UI, sans-serif'; ctx.textAlign = 'center';
     ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
     ctx.strokeText(name, x, y);
-    ctx.fillStyle = '#fff'; ctx.fillText(name, x, y);
+    ctx.fillStyle = color; ctx.fillText(name, x, y);
     ctx.restore();
+  }
+
+  // Draw a co-op player (used by both client snapshot render and host render),
+  // showing a downed state with a revive-progress ring.
+  _drawCoopPlayer(x, y, a, sprite, name, hp, mhp, downed, rv, me) {
+    const ctx = this.ctx;
+    this.drawShadow(x, y, 18);
+    ctx.save(); if (downed) ctx.globalAlpha = 0.4;
+    this.drawUnit(getSprite(sprite) || getSprite('char_commando'), x, y, a || 0, 1, false);
+    ctx.restore();
+    if (downed) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, 24, 0, TAU); ctx.stroke();
+      if (rv > 0) { ctx.strokeStyle = '#7fff8a'; ctx.beginPath(); ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + TAU * rv); ctx.stroke(); }
+      ctx.restore();
+      this._drawName(me ? 'DOWNED — get help!' : 'DOWNED', x, y - 32, '#ff8a8a');
+    } else {
+      this._drawName(name, x, y - 32);
+      this.drawHpBar(x, y - 26, 34, mhp ? hp / mhp : 0, me ? '#7fff8a' : '#7fd06b');
+    }
   }
 
   findNearestEnemy(x, y, range) {
@@ -817,9 +866,10 @@ export class Game {
     }
     this.updateStrike(dtMs);
 
-    // --- player movement ---
+    // --- player movement (a downed co-op player can't act until revived) ---
     this.input.update();
-    if (this.input.mx || this.input.my) {
+    const hostActive = !this.coopMode || p.hp > 0;
+    if (hostActive && (this.input.mx || this.input.my)) {
       p.x += this.input.mx * p.speed * dt;
       p.y += this.input.my * p.speed * dt;
       p.moveAngle = Math.atan2(this.input.my, this.input.mx);
@@ -833,7 +883,7 @@ export class Game {
     if (aimTarget) p.angle = Math.atan2(aimTarget.y - p.y, aimTarget.x - p.x);
     else p.angle = p.moveAngle;
 
-    for (const w of p.weapons) {
+    if (hostActive) for (const w of p.weapons) {
       const shots = w.update(dtMs, p, p.angle);
       if (w.startedReload) { w.startedReload = false; this.audio.reload(); }
       if (shots) {
@@ -846,8 +896,8 @@ export class Game {
       }
     }
 
-    // --- co-op: simulate remote players (host only) ---
-    if (this.coopMode) this._coopHostPlayers(dtMs);
+    // --- co-op: simulate remote players + downed-player revives (host only) ---
+    if (this.coopMode) { this._coopHostPlayers(dtMs); this._coopRevives(dt); }
 
     // --- teammates ---
     this.team.update(dtMs, this);
@@ -1178,27 +1228,27 @@ export class Game {
     if (this.coopMode) {
       for (const r of this.mp.remotes.values()) {
         const rp = r.player; if (!rp) continue;
-        this.drawShadow(rp.x, rp.y, 18);
-        ctx.save(); if (rp.hp <= 0) ctx.globalAlpha = 0.4;
-        this.drawUnit(getSprite(rp.sprite), rp.x, rp.y, rp.angle, 1, rp.invuln > 250);
-        ctx.restore();
-        this._drawName(r.n, rp.x, rp.y - 32);
-        this.drawHpBar(rp.x, rp.y - 26, 34, rp.maxHp ? rp.hp / rp.maxHp : 0, '#7fd06b');
+        const down = rp.hp <= 0;
+        this._drawCoopPlayer(rp.x, rp.y, rp.angle, rp.sprite, r.n, rp.hp, rp.maxHp, down ? 1 : 0, down ? (rp.reviveT || 0) / 2.5 : 0, false);
       }
     }
 
-    // player
-    this.drawShadow(this.player.x, this.player.y, this.player.radius);
-    // Aura while an ability buff is active (e.g. Adrenaline Rush).
-    if (this.player.buffLeft > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.35 + 0.15 * Math.sin(this.elapsed * 20);
-      ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(this.player.x, this.player.y, this.player.radius + 8, 0, TAU); ctx.stroke();
-      ctx.restore();
+    // player (downed host shows the downed/revive overlay; otherwise normal)
+    if (this.coopMode && this.player.hp <= 0) {
+      this._drawCoopPlayer(this.player.x, this.player.y, this.player.angle, this.player.sprite, this.mp.name, 0, this.player.maxHp, 1, (this.player.reviveT || 0) / 2.5, true);
+    } else {
+      this.drawShadow(this.player.x, this.player.y, this.player.radius);
+      // Aura while an ability buff is active (e.g. Adrenaline Rush).
+      if (this.player.buffLeft > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.35 + 0.15 * Math.sin(this.elapsed * 20);
+        ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(this.player.x, this.player.y, this.player.radius + 8, 0, TAU); ctx.stroke();
+        ctx.restore();
+      }
+      const pflash = this.player.invuln > 250;
+      this.drawUnit(getSprite(this.player.sprite), this.player.x, this.player.y, this.player.angle, 1, pflash);
     }
-    const pflash = this.player.invuln > 250;
-    this.drawUnit(getSprite(this.player.sprite), this.player.x, this.player.y, this.player.angle, 1, pflash);
 
     // ally bullets
     for (const b of this.allyBullets.active) {
