@@ -8,7 +8,9 @@ async function boot() {
   const canvas = document.getElementById('game-canvas');
   const game = new Game(canvas);
   game.run(); // sits on the START screen until DEPLOY is pressed
-  window.__game = game; // handy for debugging in the console
+  // Expose the game object for console debugging in DEV only. In production this
+  // line is dead-code-eliminated, so players can't poke the game from the console.
+  if (import.meta.env.DEV) window.__game = game;
 }
 
 boot();

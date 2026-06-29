@@ -23,6 +23,23 @@
     /* Shift the HUD timer clear of the back link. */
     #timer{ margin-left:104px; }
   </style>
+  <script>
+    // Casual deterrent against tampering: block right-click + the common dev-tools
+    // shortcuts. NOTE: client-side code is always viewable — this only slows casual
+    // snooping, it cannot stop a determined user (menu, view-source:, proxy, JS off).
+    (function () {
+      addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      addEventListener('keydown', function (e) {
+        var k = (e.key || '').toLowerCase();
+        var mod = e.ctrlKey || e.metaKey;
+        if (k === 'f12' ||
+            (mod && (e.shiftKey || e.altKey) && (k === 'i' || k === 'j' || k === 'c')) ||
+            (mod && k === 'u')) {
+          e.preventDefault();
+        }
+      });
+    })();
+  </script>
 </head>
 <body>
   <a id="back-to-site" href="/" title="Back to logansandivar.com">&#8592; Site</a>
